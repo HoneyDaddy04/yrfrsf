@@ -1,42 +1,30 @@
 {
-  "name": "AI Reminder App",
-  "short_name": "AIReminder",
-  "description": "Smart reminders with AI-powered notifications",
+  "name": "Yrfrsf - Your Future Self Reminder",
+  "short_name": "Yrfrsf",
+  "description": "Smart AI-powered reminders that call you like your future self. Never miss important tasks with voice notifications.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#4f46e5",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/android-chrome-192x192.png",
+      "src": "/icon-192.svg",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "/android-chrome-512x512.png",
+      "src": "/icon-512.svg",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshot1.png",
-      "sizes": "1280x800",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/screenshot2.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow"
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -44,22 +32,20 @@
       "name": "New Reminder",
       "short_name": "New",
       "description": "Create a new reminder",
-      "url": "/new-reminder",
-      "icons": [{ "src": "/icons/plus-192.png", "sizes": "192x192" }]
+      "url": "/?action=new",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
     },
     {
-      "name": "View Reminders",
-      "short_name": "Reminders",
-      "description": "View all your reminders",
-      "url": "/reminders"
+      "name": "Panic Button",
+      "short_name": "Panic",
+      "description": "Get immediate support",
+      "url": "/?action=panic",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
     }
   ],
-  "categories": ["productivity", "utilities"],
+  "categories": ["productivity", "utilities", "lifestyle"],
   "prefer_related_applications": false,
-  "related_applications": [],
   "scope": "/",
-  "orientation": "portrait",
-  "id": "/?source=pwa",
   "dir": "ltr",
   "lang": "en-US"
 }

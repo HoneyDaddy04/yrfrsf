@@ -85,12 +85,13 @@ export function useCallManager() {
       }, 1000);
     };
 
-    window.addEventListener('reminderTriggered', handleReminderTriggered as EventListener);
+    const wrappedHandler = (e: Event) => handleReminderTriggered(e as CustomEvent);
+    window.addEventListener('reminderTriggered', wrappedHandler);
     window.addEventListener('aiSpeakingStart', handleSpeakingStart);
     window.addEventListener('aiSpeakingEnd', handleSpeakingEnd);
 
     return () => {
-      window.removeEventListener('reminderTriggered', handleReminderTriggered as EventListener);
+      window.removeEventListener('reminderTriggered', wrappedHandler);
       window.removeEventListener('aiSpeakingStart', handleSpeakingStart);
       window.removeEventListener('aiSpeakingEnd', handleSpeakingEnd);
     };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Settings, PhoneMissed, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus } from 'lucide-react';
+import { Bell, Settings, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface HeaderProps {

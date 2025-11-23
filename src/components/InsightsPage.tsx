@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Phone, CheckCircle, XCircle, Clock, Target, Award, Calendar, BarChart3 } from 'lucide-react';
+import { TrendingUp, Phone, CheckCircle, Clock, Target, Award, BarChart3 } from 'lucide-react';
 import {
   getAllCallHistory,
-  getCallHistoryStats,
   getAllCompletionPrompts,
   type CallHistoryEntry,
   type CompletionPrompt,
@@ -334,7 +333,7 @@ export default function InsightsPage() {
                   {dailyBreakdown.map((day, i) => {
                     const x = (i / (dailyBreakdown.length - 1)) * 800;
                     const y = 256 - (day.score * 256) / 100;
-                    const scoreStyle = getScoreColor(day.score);
+                    // Score style available if needed: getScoreColor(day.score)
                     return (
                       <g key={i}>
                         <circle

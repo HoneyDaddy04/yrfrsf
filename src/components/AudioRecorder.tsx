@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Play, Trash2, Download } from 'lucide-react';
+import { Mic, Square, Play, Trash2 } from 'lucide-react';
 
 interface AudioRecorderProps {
   onRecordingComplete: (audioBase64: string) => void;

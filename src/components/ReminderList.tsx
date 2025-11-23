@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { AlertCircle, Inbox, RefreshCw, CheckCircle, Grid3x3, List } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { getAllReminders } from '../db/reminderDB';
 import { Reminder } from '../utils/reminderScheduler';
 import ReminderCard from './ReminderCard';
@@ -135,14 +135,15 @@ export default function ReminderList({ refreshTrigger, onReminderUpdated, onEdit
           Create your first reminder to get started!
         </p>
         <button
-          onClick={() => onEditReminder({ 
-            id: '', 
-            title: '', 
-            message: '', 
-            time: new Date().getTime(),
+          onClick={() => onEditReminder({
+            id: '',
+            title: '',
+            why: '',
+            time: new Date().toTimeString().slice(0, 5),
             nextTrigger: 0,
-            frequency: 'once',
-            active: true
+            repeat: 'once',
+            active: true,
+            createdAt: Date.now()
           })}
           className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
         >

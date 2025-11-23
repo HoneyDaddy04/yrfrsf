@@ -14,7 +14,6 @@ import { Reminder } from '../utils/reminderScheduler';
 
 const DB_NAME = 'reminder-db';
 const DB_VERSION = 3; // Incremented for completion tracking & auto-recall
-const STORE_NAME = 'reminders';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -100,7 +99,7 @@ export async function initDB(): Promise<IDBPDatabase<ReminderDB>> {
 
   try {
     db = await openDB<ReminderDB>(DB_NAME, DB_VERSION, {
-      upgrade(database, oldVersion, newVersion, transaction) {
+      upgrade(database, oldVersion, newVersion) {
         console.log(`🔄 Upgrading database from version ${oldVersion} to ${newVersion}`);
 
         // Create the reminders object store
@@ -235,8 +234,8 @@ export async function clearAllReminders(): Promise<void> {
  */
 export async function getActiveReminders(): Promise<Reminder[]> {
   const database = await initDB();
-  const index = database.transaction('reminders').store.index('by-active');
-  return index.getAll(true);
+  const allReminders = await database.getAll('reminders');
+  return allReminders.filter(r => r.active === true);
 }
 
 /**
@@ -244,8 +243,8 @@ export async function getActiveReminders(): Promise<Reminder[]> {
  */
 export async function getInactiveReminders(): Promise<Reminder[]> {
   const database = await initDB();
-  const index = database.transaction('reminders').store.index('by-active');
-  return index.getAll(false);
+  const allReminders = await database.getAll('reminders');
+  return allReminders.filter(r => r.active === false);
 }
 
 /**
@@ -509,9 +508,8 @@ export async function getCallHistoryForReminder(reminderId: string): Promise<Cal
  */
 export async function getAnsweredCalls(): Promise<CallHistoryEntry[]> {
   const database = await initDB();
-  const index = database.transaction('callHistory').store.index('by-answered');
-  const entries = await index.getAll(true);
-  return entries.sort((a, b) => b.timestamp - a.timestamp);
+  const allHistory = await database.getAll('callHistory');
+  return allHistory.filter(h => h.answered === true).sort((a, b) => b.timestamp - a.timestamp);
 }
 
 /**
@@ -519,9 +517,8 @@ export async function getAnsweredCalls(): Promise<CallHistoryEntry[]> {
  */
 export async function getMissedCalls(): Promise<CallHistoryEntry[]> {
   const database = await initDB();
-  const index = database.transaction('callHistory').store.index('by-answered');
-  const entries = await index.getAll(false);
-  return entries.sort((a, b) => b.timestamp - a.timestamp);
+  const allHistory = await database.getAll('callHistory');
+  return allHistory.filter(h => h.answered === false).sort((a, b) => b.timestamp - a.timestamp);
 }
 
 /**
@@ -641,4 +638,141 @@ export async function deleteCompletionPrompt(id: string): Promise<void> {
   const database = await initDB();
   await database.delete('completionPrompts', id);
   console.log('✅ Completion prompt deleted:', id);
+}
+
+// ============================================================================
+// DATA EXPORT/IMPORT OPERATIONS
+// ============================================================================
+
+export interface ExportData {
+  version: number;
+  exportedAt: number;
+  reminders: Reminder[];
+  callHistory: CallHistoryEntry[];
+  completionPrompts: CompletionPrompt[];
+  settings?: Record<string, unknown>;
+}
+
+/**
+ * Export all data from all stores for backup.
+ */
+export async function exportAllData(): Promise<ExportData> {
+  const database = await initDB();
+
+  const reminders = await database.getAll('reminders');
+  const callHistory = await database.getAll('callHistory');
+  const completionPrompts = await database.getAll('completionPrompts');
+
+  // Also export localStorage settings
+  let settings: Record<string, unknown> = {};
+  try {
+    const aiSettings = localStorage.getItem('aiReminderSettings');
+    const ttsSettings = localStorage.getItem('yrfrsf-tts-settings');
+    if (aiSettings) settings.aiReminderSettings = JSON.parse(aiSettings);
+    if (ttsSettings) settings.ttsSettings = JSON.parse(ttsSettings);
+  } catch (e) {
+    console.warn('Could not export some settings:', e);
+  }
+
+  return {
+    version: DB_VERSION,
+    exportedAt: Date.now(),
+    reminders,
+    callHistory,
+    completionPrompts,
+    settings,
+  };
+}
+
+/**
+ * Import data from a backup file.
+ * Optionally merge with existing data or replace.
+ */
+export async function importData(
+  data: ExportData,
+  options: { merge?: boolean } = { merge: true }
+): Promise<{ imported: number; errors: string[] }> {
+  const database = await initDB();
+  const errors: string[] = [];
+  let imported = 0;
+
+  // Import reminders
+  if (data.reminders && Array.isArray(data.reminders)) {
+    const tx = database.transaction('reminders', 'readwrite');
+    for (const reminder of data.reminders) {
+      try {
+        if (options.merge) {
+          await tx.store.put(reminder);
+        } else {
+          const exists = await tx.store.get(reminder.id);
+          if (!exists) {
+            await tx.store.add(reminder);
+          }
+        }
+        imported++;
+      } catch (e) {
+        errors.push(`Failed to import reminder: ${reminder.title}`);
+      }
+    }
+    await tx.done;
+  }
+
+  // Import call history
+  if (data.callHistory && Array.isArray(data.callHistory)) {
+    const tx = database.transaction('callHistory', 'readwrite');
+    for (const entry of data.callHistory) {
+      try {
+        if (options.merge) {
+          await tx.store.put(entry);
+        } else {
+          const exists = await tx.store.get(entry.id);
+          if (!exists) {
+            await tx.store.add(entry);
+          }
+        }
+        imported++;
+      } catch (e) {
+        errors.push(`Failed to import call history: ${entry.id}`);
+      }
+    }
+    await tx.done;
+  }
+
+  // Import completion prompts
+  if (data.completionPrompts && Array.isArray(data.completionPrompts)) {
+    const tx = database.transaction('completionPrompts', 'readwrite');
+    for (const prompt of data.completionPrompts) {
+      try {
+        if (options.merge) {
+          await tx.store.put(prompt);
+        } else {
+          const exists = await tx.store.get(prompt.id);
+          if (!exists) {
+            await tx.store.add(prompt);
+          }
+        }
+        imported++;
+      } catch (e) {
+        errors.push(`Failed to import completion prompt: ${prompt.id}`);
+      }
+    }
+    await tx.done;
+  }
+
+  // Import settings
+  if (data.settings) {
+    try {
+      if (data.settings.aiReminderSettings) {
+        localStorage.setItem('aiReminderSettings', JSON.stringify(data.settings.aiReminderSettings));
+      }
+      if (data.settings.ttsSettings) {
+        localStorage.setItem('yrfrsf-tts-settings', JSON.stringify(data.settings.ttsSettings));
+      }
+    } catch (e) {
+      errors.push('Failed to import some settings');
+    }
+  }
+
+  console.log(`✅ Import complete: ${imported} items imported, ${errors.length} errors`);
+  return { imported, errors };
 }

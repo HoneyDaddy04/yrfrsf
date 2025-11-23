@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nProduction-ready release with PWA, TTS, and Vercel deployment\n\nFeatures added:\n- PWA support with custom icons, manifest, and service worker\n- Browser-based Text-to-Speech (Web Speech API)\n- OpenAI TTS integration with voice selection\n- Data export/import for backup and sync\n- Enhanced settings modal with tabbed interface\n- Vercel deployment configuration\n\nTechnical improvements:\n- Fixed TypeScript errors for production build\n- Enhanced service worker with caching strategies\n- Added proper meta tags for SEO and social sharing\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

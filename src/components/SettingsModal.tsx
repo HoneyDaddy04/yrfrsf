@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle } from 'lucide-react';
+import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload } from 'lucide-react';
 import { AVAILABLE_RINGTONES, type RingtoneType, generateRingtone } from '../utils/ringtones';
+import { getBrowserVoices, OPENAI_VOICES, previewVoice, type TTSProvider, type BrowserVoice } from '../utils/textToSpeech';
+import { exportAllData, importData, type ExportData } from '../db/reminderDB';
 import AudioRecorder from './AudioRecorder';
 
 interface SettingsModalProps {
@@ -16,34 +18,49 @@ interface Settings {
   autoRecallEnabled: boolean;
   maxRecallAttempts: number;
   panicAudio?: string;
+  // TTS Settings
+  ttsProvider: TTSProvider;
+  browserVoice?: string;
+  browserRate: number;
+  browserPitch: number;
+  openaiVoice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
 }
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [settings, setSettings] = useState<Settings>({
     apiKey: '',
-    apiEndpoint: 'https://api.openai.com/v1/chat/completions',
+    apiEndpoint: 'https://api.openai.com/v1/audio/speech',
     voiceEnabled: true,
     notificationsEnabled: true,
     ringtone: 'chimes',
     autoRecallEnabled: true,
     maxRecallAttempts: 0,
+    ttsProvider: 'browser',
+    browserRate: 1.0,
+    browserPitch: 1.0,
+    openaiVoice: 'nova',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [browserVoices, setBrowserVoices] = useState<BrowserVoice[]>([]);
+  const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'voice' | 'data'>('general');
+  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   useEffect(() => {
     // Load settings from localStorage
     const savedSettings = localStorage.getItem('aiReminderSettings');
     if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
+      setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
     }
+
+    // Load browser voices
+    getBrowserVoices().then(setBrowserVoices);
   }, []);
 
   const handleSave = () => {
     setIsSaving(true);
-
-    // Save to localStorage
     localStorage.setItem('aiReminderSettings', JSON.stringify(settings));
 
     setTimeout(() => {
@@ -57,25 +74,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   const handlePreviewRingtone = async (ringtoneType: RingtoneType) => {
     if (isPlayingPreview) return;
-
     setIsPlayingPreview(true);
     try {
       // @ts-ignore - webkitAudioContext for Safari
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const audioContext = new AudioContext();
-
       const buffer = generateRingtone(audioContext, ringtoneType);
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(audioContext.destination);
-
-      source.onended = () => {
-        setIsPlayingPreview(false);
-      };
-
+      source.onended = () => setIsPlayingPreview(false);
       source.start();
-
-      // Auto stop after 2 seconds
       setTimeout(() => {
         source.stop();
         setIsPlayingPreview(false);
@@ -86,261 +95,486 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
+  const handlePreviewVoice = async () => {
+    if (isPreviewingVoice) return;
+    setIsPreviewingVoice(true);
+    try {
+      await previewVoice({
+        provider: settings.ttsProvider,
+        browserVoice: settings.browserVoice,
+        browserRate: settings.browserRate,
+        browserPitch: settings.browserPitch,
+        openaiApiKey: settings.apiKey,
+        openaiVoice: settings.openaiVoice,
+      });
+    } catch (error) {
+      console.error('Error previewing voice:', error);
+      alert('Failed to preview voice. ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsPreviewingVoice(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const data = await exportAllData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `yrfrsf-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export data');
+    }
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const data: ExportData = JSON.parse(text);
+      await importData(data);
+      setImportStatus('Data imported successfully! Refresh the page to see changes.');
+    } catch (error) {
+      console.error('Import failed:', error);
+      setImportStatus('Failed to import data. Please check the file format.');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-up">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">AI Settings</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+          <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-6 h-6 text-gray-500" />
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200">
+          {[
+            { id: 'general' as const, label: 'General', icon: Bell },
+            { id: 'voice' as const, label: 'Voice & Audio', icon: Mic },
+            { id: 'data' as const, label: 'Data & Backup', icon: Download },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Content */}
-        <div className="p-6 space-y-6">
-          {/* Success Message */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {saved && (
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
-              ✅ Settings saved successfully!
+              Settings saved successfully!
             </div>
           )}
 
-          {/* API Key Section */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Key className="w-5 h-5 text-primary-600" />
-              <span>OpenAI API Configuration</span>
-            </div>
+          {/* General Tab */}
+          {activeTab === 'general' && (
+            <>
+              {/* Notification Settings */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Bell className="w-5 h-5 text-indigo-600" />
+                  <span>Notifications</span>
+                </div>
 
-            {/* API Key */}
-            <div>
-              <label className="label">
-                API Key <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="password"
-                value={settings.apiKey}
-                onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
-                placeholder="sk-..."
-                className="input font-mono text-sm"
-              />
-              <p className="mt-2 text-xs text-gray-500">
-                Get your API key from{' '}
-                <a
-                  href="https://platform.openai.com/api-keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary-600 hover:underline"
-                >
-                  OpenAI Platform
-                </a>
-              </p>
-            </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">Browser Notifications</p>
+                    <p className="text-sm text-gray-600">Show desktop notifications when reminders trigger</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.notificationsEnabled}
+                      onChange={(e) => setSettings({ ...settings, notificationsEnabled: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
 
-            {/* API Endpoint */}
-            <div>
-              <label className="label">API Endpoint</label>
-              <input
-                type="text"
-                value={settings.apiEndpoint}
-                onChange={(e) => setSettings({ ...settings, apiEndpoint: e.target.value })}
-                placeholder="https://api.openai.com/v1/chat/completions"
-                className="input font-mono text-sm"
-              />
-              <p className="mt-2 text-xs text-gray-500">
-                Default OpenAI endpoint. Change if using a proxy or different provider.
-              </p>
-            </div>
-          </div>
-
-          {/* Voice Settings */}
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Volume2 className="w-5 h-5 text-primary-600" />
-              <span>Voice Call Settings</span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Enable AI Voice Calls</p>
-                <p className="text-sm text-gray-600">
-                  Trigger AI voice call when reminder is due
-                </p>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">Voice Calls</p>
+                    <p className="text-sm text-gray-600">Enable AI voice call simulation</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.voiceEnabled}
+                      onChange={(e) => setSettings({ ...settings, voiceEnabled: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.voiceEnabled}
-                  onChange={(e) => setSettings({ ...settings, voiceEnabled: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-          </div>
 
-          {/* Notification Settings */}
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Bell className="w-5 h-5 text-primary-600" />
-              <span>Notification Settings</span>
-            </div>
+              {/* Auto-Recall Settings */}
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Phone className="w-5 h-5 text-indigo-600" />
+                  <span>Auto-Recall</span>
+                </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Browser Notifications</p>
-                <p className="text-sm text-gray-600">
-                  Show desktop notifications when reminders trigger
-                </p>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">Enable Auto-Recall</p>
+                    <p className="text-sm text-gray-600">Keep calling until you answer</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.autoRecallEnabled}
+                      onChange={(e) => setSettings({ ...settings, autoRecallEnabled: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                {settings.autoRecallEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Max Recall Attempts (0 = unlimited)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      value={settings.maxRecallAttempts}
+                      onChange={(e) => setSettings({ ...settings, maxRecallAttempts: parseInt(e.target.value) || 0 })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                )}
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.notificationsEnabled}
-                  onChange={(e) => setSettings({ ...settings, notificationsEnabled: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-          </div>
 
-          {/* Auto-Recall Settings */}
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Phone className="w-5 h-5 text-primary-600" />
-              <span>Auto-Recall Settings</span>
-            </div>
+              {/* Ringtone Selection */}
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Music className="w-5 h-5 text-indigo-600" />
+                  <span>Ringtone</span>
+                </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="font-medium text-gray-900">Enable Auto-Recall</p>
-                <p className="text-sm text-gray-600">
-                  Keep calling until you answer
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.autoRecallEnabled}
-                  onChange={(e) => setSettings({ ...settings, autoRecallEnabled: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-              </label>
-            </div>
-
-            {settings.autoRecallEnabled && (
-              <div>
-                <label className="label">Max Recall Attempts (0 = unlimited)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={settings.maxRecallAttempts}
-                  onChange={(e) => setSettings({ ...settings, maxRecallAttempts: parseInt(e.target.value) || 0 })}
-                  className="input"
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  How many times to call again if you miss/decline. Set to 0 for unlimited attempts.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Ringtone Selection */}
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Music className="w-5 h-5 text-primary-600" />
-              <span>Ringtone Selection</span>
-            </div>
-
-            <div className="space-y-2">
-              {AVAILABLE_RINGTONES.map((ringtone) => (
-                <div
-                  key={ringtone.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all cursor-pointer ${
-                    settings.ringtone === ringtone.id
-                      ? 'border-primary-500 bg-primary-50'
-                      : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                  }`}
-                  onClick={() => setSettings({ ...settings, ringtone: ringtone.id })}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-4 h-4 rounded-full border-2 ${
-                      settings.ringtone === ringtone.id
-                        ? 'border-primary-500 bg-primary-500'
-                        : 'border-gray-300'
-                    }`}>
-                      {settings.ringtone === ringtone.id && (
-                        <div className="w-full h-full rounded-full bg-white scale-50"></div>
-                      )}
+                <div className="space-y-2">
+                  {AVAILABLE_RINGTONES.map((ringtone) => (
+                    <div
+                      key={ringtone.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                        settings.ringtone === ringtone.id
+                          ? 'border-indigo-500 bg-indigo-50'
+                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                      }`}
+                      onClick={() => setSettings({ ...settings, ringtone: ringtone.id })}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                          settings.ringtone === ringtone.id ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300'
+                        }`}>
+                          {settings.ringtone === ringtone.id && <div className="w-2 h-2 rounded-full bg-white" />}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{ringtone.name}</p>
+                          <p className="text-xs text-gray-600">{ringtone.description}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handlePreviewRingtone(ringtone.id); }}
+                        disabled={isPlayingPreview}
+                        className="px-3 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {isPlayingPreview ? 'Playing...' : 'Preview'}
+                      </button>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{ringtone.name}</p>
-                      <p className="text-xs text-gray-600">{ringtone.description}</p>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Voice & Audio Tab */}
+          {activeTab === 'voice' && (
+            <>
+              {/* TTS Provider Selection */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Volume2 className="w-5 h-5 text-indigo-600" />
+                  <span>Voice Provider</span>
+                </div>
+
+                <div className="space-y-2">
+                  {/* Browser TTS */}
+                  <div
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      settings.ttsProvider === 'browser'
+                        ? 'border-indigo-500 bg-indigo-50'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                    }`}
+                    onClick={() => setSettings({ ...settings, ttsProvider: 'browser' })}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        settings.ttsProvider === 'browser' ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300'
+                      }`}>
+                        {settings.ttsProvider === 'browser' && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">Browser Voice (Free)</p>
+                        <p className="text-xs text-gray-600">Uses your device's built-in text-to-speech</p>
+                      </div>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePreviewRingtone(ringtone.id);
-                    }}
-                    disabled={isPlayingPreview}
-                    className="px-3 py-1 text-xs font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+
+                  {/* OpenAI TTS */}
+                  <div
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      settings.ttsProvider === 'openai'
+                        ? 'border-indigo-500 bg-indigo-50'
+                        : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                    }`}
+                    onClick={() => setSettings({ ...settings, ttsProvider: 'openai' })}
                   >
-                    {isPlayingPreview ? 'Playing...' : 'Preview'}
-                  </button>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        settings.ttsProvider === 'openai' ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300'
+                      }`}>
+                        {settings.ttsProvider === 'openai' && <div className="w-2 h-2 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">OpenAI TTS (Premium)</p>
+                        <p className="text-xs text-gray-600">High-quality natural voices (requires API key)</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* Panic Button Custom Message */}
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <AlertCircle className="w-5 h-5 text-red-600" />
-              <span>Panic Button Message</span>
-            </div>
+              {/* Browser Voice Settings */}
+              {settings.ttsProvider === 'browser' && (
+                <div className="space-y-4 pt-4 border-t border-gray-200">
+                  <h3 className="font-semibold text-gray-900">Browser Voice Settings</h3>
 
-            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-              <p className="text-sm text-orange-800 mb-4">
-                Record a personal message that will play when you activate the panic button. This could be words of encouragement, reminders of your goals, or anything that helps you stay strong in moments of temptation.
-              </p>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Voice</label>
+                    <select
+                      value={settings.browserVoice || ''}
+                      onChange={(e) => setSettings({ ...settings, browserVoice: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value="">System Default</option>
+                      {browserVoices.map((voice) => (
+                        <option key={voice.name} value={voice.name}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <AudioRecorder
-                onRecordingComplete={(audio) => setSettings({ ...settings, panicAudio: audio })}
-                existingRecording={settings.panicAudio}
-                onClearRecording={() => setSettings({ ...settings, panicAudio: undefined })}
-              />
-            </div>
-          </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Speed: {settings.browserRate.toFixed(1)}x
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={settings.browserRate}
+                      onChange={(e) => setSettings({ ...settings, browserRate: parseFloat(e.target.value) })}
+                      className="w-full"
+                    />
+                  </div>
 
-          {/* Info Box */}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <strong>How it works:</strong> When a reminder triggers, the app will use your OpenAI API key to initiate an AI voice call. The AI will speak your reminder title and description.
-            </p>
-          </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pitch: {settings.browserPitch.toFixed(1)}
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.1"
+                      value={settings.browserPitch}
+                      onChange={(e) => setSettings({ ...settings, browserPitch: parseFloat(e.target.value) })}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* OpenAI TTS Settings */}
+              {settings.ttsProvider === 'openai' && (
+                <div className="space-y-4 pt-4 border-t border-gray-200">
+                  <h3 className="font-semibold text-gray-900">OpenAI Voice Settings</h3>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      API Key <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={settings.apiKey}
+                      onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
+                      placeholder="sk-..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Get your API key from{' '}
+                      <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+                        OpenAI Platform
+                      </a>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Voice</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {OPENAI_VOICES.map((voice) => (
+                        <div
+                          key={voice.id}
+                          className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                            settings.openaiVoice === voice.id
+                              ? 'border-indigo-500 bg-indigo-50'
+                              : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                          }`}
+                          onClick={() => setSettings({ ...settings, openaiVoice: voice.id })}
+                        >
+                          <p className="font-medium text-gray-900">{voice.name}</p>
+                          <p className="text-xs text-gray-600">{voice.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview Button */}
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={handlePreviewVoice}
+                  disabled={isPreviewingVoice || (settings.ttsProvider === 'openai' && !settings.apiKey)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-100 text-indigo-700 font-medium rounded-lg hover:bg-indigo-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Play className="w-5 h-5" />
+                  {isPreviewingVoice ? 'Playing...' : 'Preview Voice'}
+                </button>
+              </div>
+
+              {/* Panic Button Audio */}
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <span>Panic Button Message</span>
+                </div>
+
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <p className="text-sm text-orange-800 mb-4">
+                    Record a personal message that will play when you activate the panic button.
+                  </p>
+                  <AudioRecorder
+                    onRecordingComplete={(audio) => setSettings({ ...settings, panicAudio: audio })}
+                    existingRecording={settings.panicAudio}
+                    onClearRecording={() => setSettings({ ...settings, panicAudio: undefined })}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Data & Backup Tab */}
+          {activeTab === 'data' && (
+            <>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Download className="w-5 h-5 text-indigo-600" />
+                  <span>Backup & Restore</span>
+                </div>
+
+                <p className="text-sm text-gray-600">
+                  Export your data to a file for backup, or import data from a previous backup.
+                </p>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleExport}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    <Download className="w-5 h-5" />
+                    Export Data
+                  </button>
+
+                  <label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors cursor-pointer">
+                    <Upload className="w-5 h-5" />
+                    Import Data
+                    <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                  </label>
+                </div>
+
+                {importStatus && (
+                  <div className={`p-4 rounded-lg ${importStatus.includes('success') ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                    {importStatus}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Key className="w-5 h-5 text-indigo-600" />
+                  <span>Data Privacy</span>
+                </div>
+
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Your data stays local.</strong> All your reminders, settings, and history are stored only on your device using IndexedDB. We never send your personal data to any server.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    <strong>API Key Security:</strong> If you use OpenAI TTS, your API key is stored locally and only used for direct communication with OpenAI's servers. It never passes through our servers.
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 p-6 border-t border-gray-200">
+        <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50">
           <button
             onClick={onClose}
-            className="btn btn-secondary flex-1"
+            className="flex-1 px-4 py-3 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
             disabled={isSaving}
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="btn btn-primary flex-1 flex items-center justify-center gap-2"
-            disabled={isSaving || !settings.apiKey}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+            disabled={isSaving}
           >
             {isSaving ? (
               <>
