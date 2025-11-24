@@ -279,7 +279,7 @@ export async function initiateAIVoiceCall(reminder: Reminder, settings: any): Pr
 // SCHEDULER
 // ============================================================================
 
-let schedulerInterval: number | null = null;
+let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Starts the reminder scheduler that checks for due reminders every 5 seconds.
