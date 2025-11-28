@@ -61,28 +61,40 @@ export default function InsightsPage() {
   const filteredCompletionPrompts = completionPrompts.filter(p => p.promptedAt >= timeRangeBoundary);
 
   // Calculate statistics
-  // Only count completion prompts that have been responded to
-  const respondedPrompts = filteredCompletionPrompts.filter(p => p.respondedAt && !p.skipped);
-
   const stats = {
     totalCalls: filteredCallHistory.length,
     answeredCalls: filteredCallHistory.filter(c => c.answered).length,
     missedCalls: filteredCallHistory.filter(c => !c.answered).length,
-    totalPrompts: respondedPrompts.length, // Total prompts that were actually responded to
-    completedTasks: respondedPrompts.filter(p => p.completed).length, // Only count completed among responded prompts
+    // For completion, count prompts that user responded to (completed OR skipped with response)
+    totalPrompts: filteredCompletionPrompts.filter(p => p.respondedAt).length,
+    completedTasks: filteredCompletionPrompts.filter(p => p.completed).length,
     recallAttempts: filteredCallHistory.filter(c => (c.recallAttempt || 1) > 1).length,
   };
 
+  // Answer rate based on actual calls
   const answerRate = stats.totalCalls > 0
     ? Math.min(100, Math.round((stats.answeredCalls / stats.totalCalls) * 100))
     : 0;
 
+  // Completion rate - if no prompts yet, use answer rate as proxy
+  // This prevents 0% completion when user just started
   const completionRate = stats.totalPrompts > 0
     ? Math.min(100, Math.round((stats.completedTasks / stats.totalPrompts) * 100))
-    : 0;
+    : (stats.answeredCalls > 0 ? 50 : 0); // Give partial credit if answering calls but no check-ins yet
 
-  // Discipline score (combination of answer rate and completion rate) - capped at 100%
-  const disciplineScore = Math.min(100, Math.round((answerRate + completionRate) / 2));
+  // Discipline score calculation:
+  // - If user has both calls and prompts, average them
+  // - If user only has calls (no check-ins yet), use answer rate with slight penalty
+  // - This rewards users for answering calls even before completing check-ins
+  let disciplineScore: number;
+  if (stats.totalPrompts > 0) {
+    disciplineScore = Math.min(100, Math.round((answerRate + completionRate) / 2));
+  } else if (stats.totalCalls > 0) {
+    // No check-ins yet, but has answered calls - give credit based on answer rate
+    disciplineScore = Math.min(100, Math.round(answerRate * 0.7)); // 70% weight for just answering
+  } else {
+    disciplineScore = 0;
+  }
 
   // Average call duration
   const durationsMs = filteredCallHistory
@@ -128,14 +140,23 @@ export default function InsightsPage() {
       const dayEnd = dayStart + 24 * 60 * 60 * 1000;
 
       const dayCalls = callHistory.filter(c => c.timestamp >= dayStart && c.timestamp < dayEnd);
-      const dayPrompts = completionPrompts.filter(p => p.promptedAt >= dayStart && p.promptedAt < dayEnd && p.respondedAt && !p.skipped);
+      const dayPrompts = completionPrompts.filter(p => p.promptedAt >= dayStart && p.promptedAt < dayEnd && p.respondedAt);
 
       const dayAnswered = dayCalls.filter(c => c.answered).length;
       const dayCompleted = dayPrompts.filter(p => p.completed).length;
 
       const dayAnswerRate = dayCalls.length > 0 ? Math.round((dayAnswered / dayCalls.length) * 100) : 0;
       const dayCompletionRate = dayPrompts.length > 0 ? Math.round((dayCompleted / dayPrompts.length) * 100) : 0;
-      const dayScore = dayCalls.length > 0 || dayPrompts.length > 0 ? Math.round((dayAnswerRate + dayCompletionRate) / 2) : 0;
+
+      // Calculate day score - reward answering even without check-ins
+      let dayScore: number;
+      if (dayPrompts.length > 0) {
+        dayScore = Math.round((dayAnswerRate + dayCompletionRate) / 2);
+      } else if (dayCalls.length > 0) {
+        dayScore = Math.round(dayAnswerRate * 0.7);
+      } else {
+        dayScore = 0;
+      }
 
       days.push({
         date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),

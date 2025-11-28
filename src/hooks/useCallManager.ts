@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Reminder, initiateAIVoiceCall } from '../utils/reminderScheduler';
+import { Reminder } from '../utils/reminderScheduler';
 import { addCallHistory, updateCallHistory, CallHistoryEntry } from '../db/reminderDB';
 import { scheduleRecall, cancelRecall } from '../utils/autoRecall';
+import { speakWithBrowser, speakWithOpenAI, generateReminderSpeech } from '../utils/textToSpeech';
 
 export type CallState = 'idle' | 'incoming' | 'active' | 'ended';
 
@@ -166,49 +167,64 @@ export function useCallManager() {
           window.dispatchEvent(new Event('aiSpeakingEnd'));
         }
       } else {
-        // Use AI TTS
+        // Use TTS (browser or OpenAI based on settings)
         const settingsStr = localStorage.getItem('aiReminderSettings');
         const settings = settingsStr ? JSON.parse(settingsStr) : null;
+        const speechText = generateReminderSpeech(currentReminder.title, currentReminder.why);
 
-        if (settings?.voiceEnabled && settings?.apiKey) {
-          try {
-            await initiateAIVoiceCall(currentReminder, settings);
+        // Dispatch speaking start event
+        window.dispatchEvent(new Event('aiSpeakingStart'));
 
-            // Update call history: voice played successfully
-            if (currentCallHistory) {
-              const updatedEntry = {
-                ...currentCallHistory,
-                answered: true,
-                answeredAt: currentCallHistory.answeredAt || Date.now(),
-                voicePlayed: true,
-                voicePlayedSuccessfully: true,
-              };
-              await updateCallHistory(updatedEntry);
-              setCurrentCallHistory(updatedEntry);
-            }
-          } catch (error) {
-            console.error("❌ AI voice call failed:", error);
-
-            // Update call history: voice failed
-            if (currentCallHistory) {
-              const updatedEntry = {
-                ...currentCallHistory,
-                answered: true,
-                answeredAt: currentCallHistory.answeredAt || Date.now(),
-                voicePlayed: true,
-                voicePlayedSuccessfully: false,
-              };
-              await updateCallHistory(updatedEntry);
-              setCurrentCallHistory(updatedEntry);
-            }
-
-            // End call if voice fails
-            setTimeout(() => hangupCall(), 2000);
+        try {
+          // Check which TTS provider to use
+          if (settings?.ttsProvider === 'openai' && settings?.apiKey) {
+            // Use OpenAI TTS
+            await speakWithOpenAI(speechText, {
+              openaiApiKey: settings.apiKey,
+              openaiVoice: settings.openaiVoice || 'nova',
+            });
+          } else {
+            // Use Browser TTS (default, free)
+            await speakWithBrowser(speechText, {
+              browserVoice: settings?.browserVoice,
+              browserRate: settings?.browserRate || 1.0,
+              browserPitch: settings?.browserPitch || 1.0,
+            });
           }
-        } else {
-          console.warn("⚠️ No API key configured - voice disabled");
-          // End call after 3 seconds if no voice
-          setTimeout(() => hangupCall(), 3000);
+
+          // Update call history: voice played successfully
+          if (currentCallHistory) {
+            const updatedEntry = {
+              ...currentCallHistory,
+              answered: true,
+              answeredAt: currentCallHistory.answeredAt || Date.now(),
+              voicePlayed: true,
+              voicePlayedSuccessfully: true,
+            };
+            await updateCallHistory(updatedEntry);
+            setCurrentCallHistory(updatedEntry);
+          }
+
+          // Dispatch speaking end event
+          window.dispatchEvent(new Event('aiSpeakingEnd'));
+        } catch (error) {
+          console.error("❌ TTS failed:", error);
+
+          // Update call history: voice failed
+          if (currentCallHistory) {
+            const updatedEntry = {
+              ...currentCallHistory,
+              answered: true,
+              answeredAt: currentCallHistory.answeredAt || Date.now(),
+              voicePlayed: true,
+              voicePlayedSuccessfully: false,
+            };
+            await updateCallHistory(updatedEntry);
+            setCurrentCallHistory(updatedEntry);
+          }
+
+          // Dispatch speaking end event even on failure
+          window.dispatchEvent(new Event('aiSpeakingEnd'));
         }
       }
     }

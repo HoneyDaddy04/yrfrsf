@@ -1,6 +1,6 @@
-import { AlertCircle, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { AlertCircle, X, Minimize2, Maximize2 } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
 
 interface PanicButtonProps {
   onPanic: () => void;
@@ -8,9 +8,33 @@ interface PanicButtonProps {
 
 export default function PanicButton({ onPanic }: PanicButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const constraintsRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
+
+  // Load saved position and minimized state from localStorage
+  useEffect(() => {
+    const savedState = localStorage.getItem('panicButtonState');
+    if (savedState) {
+      const { minimized, pos } = JSON.parse(savedState);
+      setIsMinimized(minimized || false);
+      if (pos) setPosition(pos);
+    }
+  }, []);
+
+  // Save state to localStorage
+  const saveState = (minimized: boolean, pos: { x: number; y: number }) => {
+    localStorage.setItem('panicButtonState', JSON.stringify({ minimized, pos }));
+  };
 
   const handlePanicClick = () => {
-    setShowConfirm(true);
+    if (isMinimized) {
+      setIsMinimized(false);
+      saveState(false, position);
+    } else {
+      setShowConfirm(true);
+    }
   };
 
   const confirmPanic = () => {
@@ -18,29 +42,89 @@ export default function PanicButton({ onPanic }: PanicButtonProps) {
     onPanic();
   };
 
+  const toggleMinimize = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newMinimized = !isMinimized;
+    setIsMinimized(newMinimized);
+    saveState(newMinimized, position);
+  };
+
+  const handleDragEnd = (_: any, info: any) => {
+    const newPos = { x: position.x + info.offset.x, y: position.y + info.offset.y };
+    setPosition(newPos);
+    saveState(isMinimized, newPos);
+  };
+
   return (
     <>
+      {/* Drag constraints container - full viewport */}
+      <div ref={constraintsRef} className="fixed inset-0 pointer-events-none z-40" />
+
       {/* Panic Button */}
       <motion.div
+        drag
+        dragControls={dragControls}
+        dragConstraints={constraintsRef}
+        dragElastic={0.1}
+        dragMomentum={false}
+        onDragEnd={handleDragEnd}
         initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="fixed bottom-20 sm:bottom-6 left-4 sm:left-6 z-40"
+        animate={{
+          scale: 1,
+          opacity: 1,
+          x: position.x,
+          y: position.y,
+        }}
+        className="fixed bottom-20 sm:bottom-6 left-4 sm:left-6 z-40 pointer-events-auto touch-none"
+        style={{ touchAction: 'none' }}
       >
-        <button
-          onClick={handlePanicClick}
-          className="group relative p-3 sm:p-4 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-full shadow-2xl hover:shadow-red-500/50 hover:scale-110 transition-all duration-300"
-          title="Emergency Support - Click for immediate help"
-        >
-          <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6" />
+        {isMinimized ? (
+          // Minimized view - small pill on the side
+          <motion.button
+            onClick={handlePanicClick}
+            className="flex items-center gap-1 px-2 py-1.5 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-full shadow-lg hover:shadow-red-500/50 transition-all"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title="Click to expand panic button"
+          >
+            <AlertCircle className="w-4 h-4" />
+            <Maximize2 className="w-3 h-3" />
+          </motion.button>
+        ) : (
+          // Full view
+          <div className="relative group">
+            <motion.button
+              onClick={handlePanicClick}
+              className="relative p-3 sm:p-4 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-full shadow-2xl hover:shadow-red-500/50 hover:scale-110 transition-all duration-300"
+              title="Emergency Support - Click for immediate help (drag to move)"
+              whileTap={{ scale: 0.95 }}
+            >
+              <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6" />
 
-          {/* Pulse Animation */}
-          <span className="absolute inset-0 rounded-full bg-red-400 opacity-0 group-hover:opacity-75 group-hover:animate-ping"></span>
-        </button>
+              {/* Pulse Animation */}
+              <span className="absolute inset-0 rounded-full bg-red-400 opacity-0 group-hover:opacity-75 group-hover:animate-ping pointer-events-none"></span>
+            </motion.button>
 
-        {/* Label - Hidden on mobile */}
-        <div className="hidden sm:block text-xs text-gray-600 font-medium text-center px-2 mt-2 whitespace-nowrap">
-          Panic Button
-        </div>
+            {/* Minimize button */}
+            <button
+              onClick={toggleMinimize}
+              className="absolute -top-1 -right-1 w-5 h-5 bg-gray-700 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-gray-600"
+              title="Minimize"
+            >
+              <Minimize2 className="w-3 h-3" />
+            </button>
+
+            {/* Label - Hidden on mobile */}
+            <div className="hidden sm:block text-xs text-gray-600 font-medium text-center px-2 mt-2 whitespace-nowrap pointer-events-none">
+              Panic Button
+            </div>
+
+            {/* Drag hint */}
+            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-gray-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              Drag to move
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {/* Confirmation Modal */}

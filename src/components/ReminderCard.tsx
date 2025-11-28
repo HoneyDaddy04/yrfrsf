@@ -60,81 +60,76 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
   // List view rendering
   if (viewMode === 'list') {
     return (
-      <div className={`flex items-center justify-between p-4 bg-white rounded-lg border transition-all hover:shadow-md ${!reminder.active ? 'opacity-60' : ''} ${isOverdue ? 'border-l-4 border-red-500' : 'border-gray-200'}`}>
-        {/* Left: Reminder info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <h3 className="font-semibold text-gray-900 truncate">{reminder.title}</h3>
-            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getRepeatBadgeColor(reminder.repeat)}`}>
+      <div className={`p-3 sm:p-4 bg-white rounded-lg border transition-all hover:shadow-md ${!reminder.active ? 'opacity-60' : ''} ${isOverdue ? 'border-l-4 border-red-500' : 'border-gray-200'}`}>
+        {/* Top row: Title and status */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-2 flex-1">{reminder.title}</h3>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full ${getRepeatBadgeColor(reminder.repeat)}`}>
               {reminder.repeat}
             </span>
             {reminder.active && !isOverdue && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                Active
-              </span>
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Active"></span>
             )}
             {!reminder.active && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded-full">
-                Paused
-              </span>
+              <span className="w-2 h-2 bg-gray-400 rounded-full" title="Paused"></span>
             )}
             {isOverdue && reminder.active && (
-              <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">
-                Overdue
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
-              <span>{reminder.time}</span>
-            </div>
-            {reminder.active && (
-              <div className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                <span className="truncate">{countdown}</span>
-              </div>
+              <span className="w-2 h-2 bg-red-500 rounded-full" title="Overdue"></span>
             )}
           </div>
         </div>
 
-        {/* Right: Actions */}
-        <div className="flex items-center gap-2 ml-4">
+        {/* Middle row: Time info */}
+        <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-600 mb-2">
+          <div className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>{reminder.time}</span>
+          </div>
+          {reminder.active && (
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              <span className="truncate text-xs">{countdown}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom row: Actions */}
+        <div className="flex items-center justify-end gap-1 sm:gap-2 pt-2 border-t border-gray-100">
           {onCheckIn && (
             <button
               onClick={() => onCheckIn(reminder)}
-              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              className="p-1.5 sm:p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
               title="Check In"
             >
-              <CheckCircle className="w-5 h-5" />
+              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
           <button
             onClick={handleToggleActive}
-            className={`p-2 rounded-lg transition-colors ${
+            className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
               reminder.active
                 ? 'text-yellow-600 hover:bg-yellow-50'
                 : 'text-green-600 hover:bg-green-50'
             }`}
             title={reminder.active ? 'Pause' : 'Resume'}
           >
-            {reminder.active ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            {reminder.active ? <Pause className="w-4 h-4 sm:w-5 sm:h-5" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
           <button
             onClick={() => onEdit(reminder)}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            className="p-1.5 sm:p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             title="Edit"
           >
-            <Edit className="w-5 h-5" />
+            <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
           <button
             onClick={handleDelete}
             disabled={isDeleting}
-            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+            className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
             title="Delete"
           >
-            <Trash2 className="w-5 h-5" />
+            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>
