@@ -21,7 +21,9 @@ export interface Reminder {
   nextTrigger: number; // UTC timestamp in milliseconds
   active: boolean;
   createdAt: number;
-  customInterval?: number; // Optional: for custom repeat (in milliseconds)
+  customInterval?: number; // Optional: for custom repeat (in milliseconds) - used for "every X hours"
+  daysOfWeek?: number[]; // Optional: specific days (0-6, Sun-Sat) for "specific days" repeat
+  specificTimes?: string[]; // Optional: multiple times for "specific times" repeat (e.g., ["09:00", "14:00", "18:00"])
   audioRecording?: string; // Optional: base64-encoded audio blob for self-recorded messages
   useCustomAudio?: boolean; // Whether to use custom audio instead of AI TTS
 }
@@ -32,10 +34,10 @@ export interface Reminder {
 
 /**
  * Computes the next trigger timestamp for a reminder.
- * 
+ *
  * @param reminder - The reminder object containing time and repeat settings
  * @returns UTC timestamp (in ms) of the next scheduled occurrence
- * 
+ *
  * Logic:
  * 1. Parse the time string into hours/minutes
  * 2. Create a Date object for today at that time
@@ -44,6 +46,17 @@ export interface Reminder {
  */
 export function computeNextTrigger(reminder: Reminder): number {
   const now = Date.now();
+
+  // Handle specific times (multiple times per day)
+  if (reminder.repeat === 'custom' && reminder.specificTimes && reminder.specificTimes.length > 0) {
+    return computeNextTriggerForSpecificTimes(reminder.specificTimes, now);
+  }
+
+  // Handle specific days
+  if (reminder.repeat === 'custom' && reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
+    return computeNextTriggerForSpecificDays(reminder.time, reminder.daysOfWeek, now);
+  }
+
   const [hours, minutes] = reminder.time.split(':').map(Number);
 
   // Validate time format
@@ -87,7 +100,7 @@ export function computeNextTrigger(reminder: Reminder): number {
         break;
 
       case "custom":
-        // Use custom interval if provided, otherwise default to daily
+        // Use custom interval if provided (every X hours), otherwise default to daily
         if (reminder.customInterval && reminder.customInterval > 0) {
           const intervalsToAdd = Math.ceil((now - nextTrigger) / reminder.customInterval);
           nextTrigger = nextTrigger + (intervalsToAdd * reminder.customInterval);
@@ -108,9 +121,84 @@ export function computeNextTrigger(reminder: Reminder): number {
 }
 
 /**
+ * Computes next trigger for reminders with specific times (e.g., 9am, 2pm, 6pm)
+ */
+function computeNextTriggerForSpecificTimes(times: string[], now: number): number {
+  const today = new Date();
+  const triggers: number[] = [];
+
+  // Sort times chronologically
+  const sortedTimes = [...times].sort();
+
+  // Check each time for today
+  for (const timeStr of sortedTimes) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) continue;
+
+    const triggerDate = new Date(today);
+    triggerDate.setHours(hours, minutes, 0, 0);
+
+    if (triggerDate.getTime() > now) {
+      triggers.push(triggerDate.getTime());
+    }
+  }
+
+  // If no times left today, get first time tomorrow
+  if (triggers.length === 0) {
+    const [hours, minutes] = sortedTimes[0].split(':').map(Number);
+    const tomorrowDate = new Date(today);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    tomorrowDate.setHours(hours, minutes, 0, 0);
+    return tomorrowDate.getTime();
+  }
+
+  // Return the earliest upcoming time
+  return Math.min(...triggers);
+}
+
+/**
+ * Computes next trigger for reminders on specific days (e.g., Mon, Wed, Fri)
+ */
+function computeNextTriggerForSpecificDays(time: string, days: number[], now: number): number {
+  const [hours, minutes] = time.split(':').map(Number);
+  if (isNaN(hours) || isNaN(minutes)) {
+    return now + 60000; // Fallback
+  }
+
+  const today = new Date();
+  const currentDay = today.getDay(); // 0 = Sunday, 6 = Saturday
+
+  // Sort days
+  const sortedDays = [...days].sort((a, b) => a - b);
+
+  // Check if today is a valid day and time hasn't passed
+  if (sortedDays.includes(currentDay)) {
+    const todayTrigger = new Date(today);
+    todayTrigger.setHours(hours, minutes, 0, 0);
+    if (todayTrigger.getTime() > now) {
+      return todayTrigger.getTime();
+    }
+  }
+
+  // Find the next valid day
+  for (let i = 1; i <= 7; i++) {
+    const checkDay = (currentDay + i) % 7;
+    if (sortedDays.includes(checkDay)) {
+      const nextDate = new Date(today);
+      nextDate.setDate(nextDate.getDate() + i);
+      nextDate.setHours(hours, minutes, 0, 0);
+      return nextDate.getTime();
+    }
+  }
+
+  // Fallback: shouldn't reach here if days array is valid
+  return now + 24 * 60 * 60 * 1000;
+}
+
+/**
  * Calculates the next trigger time after a reminder has been triggered.
  * This is used to reschedule recurring reminders.
- * 
+ *
  * @param reminder - The reminder that was just triggered
  * @returns UTC timestamp (in ms) of the next occurrence, or null if one-time reminder
  */
@@ -121,8 +209,18 @@ export function computeNextRecurrence(reminder: Reminder): number | null {
   }
 
   const now = Date.now();
-  const currentTrigger = reminder.nextTrigger;
 
+  // For custom repeats with specific times or days, use computeNextTrigger
+  if (reminder.repeat === 'custom') {
+    if (reminder.specificTimes && reminder.specificTimes.length > 0) {
+      return computeNextTriggerForSpecificTimes(reminder.specificTimes, now);
+    }
+    if (reminder.daysOfWeek && reminder.daysOfWeek.length > 0) {
+      return computeNextTriggerForSpecificDays(reminder.time, reminder.daysOfWeek, now);
+    }
+  }
+
+  const currentTrigger = reminder.nextTrigger;
   let nextTrigger: number;
 
   switch (reminder.repeat) {
@@ -142,7 +240,7 @@ export function computeNextRecurrence(reminder: Reminder): number | null {
       break;
 
     case "custom":
-      // Use custom interval if provided
+      // Use custom interval if provided (every X hours)
       if (reminder.customInterval && reminder.customInterval > 0) {
         nextTrigger = currentTrigger + reminder.customInterval;
       } else {

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Bell, Settings, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus } from 'lucide-react';
+import { Bell, Settings, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface HeaderProps {
   onSettingsClick: () => void;
   onCallHistoryClick?: () => void;
   onNewReminderClick?: () => void;
+  onReceivedRemindersClick?: () => void;
   missedCallsCount?: number;
+  receivedCallsCount?: number;
   activeTab?: 'home' | 'reminders' | 'insights';
   onTabChange?: (tab: 'home' | 'reminders' | 'insights') => void;
 }
@@ -15,7 +17,9 @@ export default function Header({
   onSettingsClick,
   onCallHistoryClick = () => {},
   onNewReminderClick = () => {},
+  onReceivedRemindersClick = () => {},
   missedCallsCount = 0,
+  receivedCallsCount = 0,
   activeTab = 'home',
   onTabChange = () => {}
 }: HeaderProps) {
@@ -170,6 +174,20 @@ export default function Header({
                 <span className="text-xs font-medium text-gray-700">{timeStr}</span>
               </div>
             </div>
+
+            {/* Received Reminders button */}
+            <button
+              onClick={onReceivedRemindersClick}
+              className="relative p-1.5 rounded-full bg-white text-gray-400 hover:text-gray-500 focus:outline-none"
+              title="Received Reminders"
+            >
+              <Phone className="h-5 w-5" />
+              {receivedCallsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {receivedCallsCount}
+                </span>
+              )}
+            </button>
 
             {/* Call History button */}
             <button

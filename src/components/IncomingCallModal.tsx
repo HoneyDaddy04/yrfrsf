@@ -7,6 +7,10 @@ interface IncomingCallModalProps {
   recallAttempt?: number;
   onAnswer: () => void;
   onDecline: () => void;
+  // Optional: for calls from other users
+  senderName?: string;
+  senderEmail?: string;
+  isFromOther?: boolean;
 }
 
 export default function IncomingCallModal({
@@ -15,6 +19,9 @@ export default function IncomingCallModal({
   recallAttempt = 1,
   onAnswer,
   onDecline,
+  senderName,
+  senderEmail,
+  isFromOther = false,
 }: IncomingCallModalProps) {
   const [isRinging, setIsRinging] = useState(true);
 
@@ -35,20 +42,27 @@ export default function IncomingCallModal({
       <div className="w-full max-w-sm space-y-6">
         {/* Caller Info - Compact */}
         <div className="flex flex-col items-center">
-          <div className={`w-20 h-20 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center mb-3 ${isRinging ? 'animate-pulse' : ''}`}>
+          <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${isFromOther ? 'from-indigo-500 to-pink-600' : 'from-primary-500 to-purple-600'} flex items-center justify-center mb-3 ${isRinging ? 'animate-pulse' : ''}`}>
             <User className="w-10 h-10 text-white" />
           </div>
 
           <h2 className="text-white text-xl font-bold mb-1">
-            Your Future Self
-            {recallAttempt > 1 && (
+            {isFromOther ? (senderName || 'Someone') : 'Your Future Self'}
+            {!isFromOther && recallAttempt > 1 && (
               <span className="ml-2 text-sm text-yellow-400">
                 (Attempt #{recallAttempt})
               </span>
             )}
           </h2>
+          {isFromOther && senderEmail && (
+            <p className="text-gray-500 text-xs mb-1">{senderEmail}</p>
+          )}
           <p className="text-gray-400 text-sm">
-            {recallAttempt > 1 ? `Calling again...` : 'Incoming call...'}
+            {isFromOther
+              ? 'is sending you a reminder...'
+              : recallAttempt > 1
+                ? `Calling again...`
+                : 'Incoming call...'}
           </p>
 
           {/* Ringing Animation */}

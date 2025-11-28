@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
 import { useCallManager } from './hooks/useCallManager';
 import { useRecallChecker } from './hooks/useRecallChecker';
+import { useIncomingCalls } from './hooks/useIncomingCalls';
+import { useSupabaseReminderScheduler } from './hooks/useSupabaseReminderScheduler';
 import { getAllReminders, updateReminder, initDB, addCompletionPrompt, updateCompletionPrompt } from './db/reminderDB';
 import { Reminder, computeNextTrigger } from './utils/reminderScheduler';
 import { showCallNotification, stopAllNotifications, requestNotificationPermission } from './utils/notificationUtils';
@@ -21,6 +23,7 @@ import InsightsPage from './components/InsightsPage';
 import PanicButton from './components/PanicButton';
 import ComingSoonModal from './components/ComingSoonModal';
 import FeedbackModal from './components/FeedbackModal';
+import ReceivedRemindersModal from './components/ReceivedRemindersModal';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'reminders' | 'insights'>('home');
@@ -29,6 +32,7 @@ function App() {
   const [isCallHistoryModalOpen, setIsCallHistoryModalOpen] = useState(false);
   const [isComingSoonModalOpen, setIsComingSoonModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [isReceivedRemindersModalOpen, setIsReceivedRemindersModalOpen] = useState(false);
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
@@ -36,6 +40,12 @@ function App() {
 
   // Call manager for phone simulation
   const { callState, currentReminder, isAISpeaking, missedCalls, currentCallHistory, answerCall, declineCall, hangupCall } = useCallManager();
+
+  // Incoming calls from other users (via Supabase real-time)
+  const { incomingCall, pendingCalls, answerIncomingCall, declineIncomingCall } = useIncomingCalls();
+
+  // State for handling incoming call from others (used for tracking external call flow)
+  const [, setIsHandlingExternalCall] = useState(false);
 
   // Register service worker for notifications
   useEffect(() => {
@@ -83,6 +93,9 @@ function App() {
 
   // Start the recall checker
   useRecallChecker();
+
+  // Start the Supabase reminder scheduler (for reminders sent to others)
+  useSupabaseReminderScheduler();
 
   const handleReminderCreated = () => {
     setIsCreateModalOpen(false);
@@ -301,6 +314,43 @@ function App() {
     };
   }, []);
 
+  // Handle answering an external incoming call (from another user)
+  const handleAnswerExternalCall = async () => {
+    const callData = await answerIncomingCall();
+    if (callData) {
+      setIsHandlingExternalCall(true);
+
+      // Create a virtual reminder from the call data to play audio
+      const virtualReminder: Reminder = {
+        id: callData.reminder_id || `external-${callData.id}`,
+        title: callData.reminder_title,
+        why: callData.reminder_why || '',
+        time: new Date().toTimeString().slice(0, 5),
+        repeat: 'once',
+        nextTrigger: callData.triggered_at,
+        active: false,
+        createdAt: Date.now(),
+        audioRecording: callData.audio_recording || undefined,
+        useCustomAudio: callData.use_custom_audio || false,
+      };
+
+      // Dispatch as a reminder event so call manager handles it
+      window.dispatchEvent(new CustomEvent('reminderTriggered', {
+        detail: {
+          ...virtualReminder,
+          isFromOther: true,
+          senderName: callData.sender_name,
+          senderEmail: callData.sender_email,
+        }
+      }));
+    }
+  };
+
+  // Handle declining an external incoming call
+  const handleDeclineExternalCall = async () => {
+    await declineIncomingCall();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50">
       {/* Header with Navigation */}
@@ -308,7 +358,9 @@ function App() {
         onSettingsClick={() => setIsSettingsModalOpen(true)}
         onCallHistoryClick={() => setIsCallHistoryModalOpen(true)}
         onNewReminderClick={() => setIsCreateModalOpen(true)}
+        onReceivedRemindersClick={() => setIsReceivedRemindersModalOpen(true)}
         missedCallsCount={missedCalls.length}
+        receivedCallsCount={pendingCalls.length}
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
@@ -450,14 +502,30 @@ function App() {
         />
       )}
 
-      {/* Incoming Call Modal */}
-      {callState === 'incoming' && currentReminder && (
+      {/* Incoming Call Modal - Self reminders */}
+      {callState === 'incoming' && currentReminder && !incomingCall && (
         <IncomingCallModal
           reminderTitle={currentReminder.title}
           reminderWhy={currentReminder.why}
           recallAttempt={(currentReminder as any).recallAttempt}
           onAnswer={answerCall}
           onDecline={declineCall}
+          isFromOther={(currentReminder as any).isFromOther}
+          senderName={(currentReminder as any).senderName}
+          senderEmail={(currentReminder as any).senderEmail}
+        />
+      )}
+
+      {/* Incoming Call Modal - From other users (Supabase real-time) */}
+      {incomingCall && callState === 'idle' && (
+        <IncomingCallModal
+          reminderTitle={incomingCall.reminder_title}
+          reminderWhy={incomingCall.reminder_why || ''}
+          onAnswer={handleAnswerExternalCall}
+          onDecline={handleDeclineExternalCall}
+          isFromOther={true}
+          senderName={incomingCall.sender_name || undefined}
+          senderEmail={incomingCall.sender_email || undefined}
         />
       )}
 
@@ -489,6 +557,11 @@ function App() {
       {/* Feedback Modal */}
       {isFeedbackModalOpen && (
         <FeedbackModal onClose={() => setIsFeedbackModalOpen(false)} />
+      )}
+
+      {/* Received Reminders Modal */}
+      {isReceivedRemindersModalOpen && (
+        <ReceivedRemindersModal onClose={() => setIsReceivedRemindersModalOpen(false)} />
       )}
 
       {/* Footer */}
