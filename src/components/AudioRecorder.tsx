@@ -9,7 +9,8 @@ interface AudioRecorderProps {
 
 export default function AudioRecorder({ onRecordingComplete, existingRecording, onClearRecording }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState<string | null>(existingRecording || null);
+  const [audioURL, setAudioURL] = useState<string | null>(null);
+  const [audioBase64, setAudioBase64] = useState<string | null>(existingRecording || null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -52,6 +53,7 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
         reader.readAsDataURL(audioBlob);
         reader.onloadend = () => {
           const base64 = reader.result as string;
+          setAudioBase64(base64);
           onRecordingComplete(base64);
         };
 
@@ -85,28 +87,46 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
   };
 
   const playRecording = () => {
-    if (audioURL) {
+    // Use audioURL (blob) if available, otherwise use base64
+    const audioSource = audioURL || audioBase64;
+
+    if (audioSource) {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
 
-      const audio = new Audio(audioURL);
+      const audio = new Audio(audioSource);
       audioRef.current = audio;
-      audio.play();
-      setIsPlaying(true);
 
       audio.onended = () => {
         setIsPlaying(false);
       };
+
+      audio.onerror = (e) => {
+        console.error('Audio playback error:', e);
+        setIsPlaying(false);
+        alert('Failed to play recording. Please try recording again.');
+      };
+
+      audio.play()
+        .then(() => {
+          setIsPlaying(true);
+        })
+        .catch((err) => {
+          console.error('Play failed:', err);
+          setIsPlaying(false);
+          alert('Failed to play recording. Please try again.');
+        });
     }
   };
 
   const clearRecording = () => {
-    if (audioURL && !existingRecording) {
+    if (audioURL) {
       URL.revokeObjectURL(audioURL);
     }
     setAudioURL(null);
+    setAudioBase64(null);
     setRecordingTime(0);
     if (audioRef.current) {
       audioRef.current.pause();
@@ -133,7 +153,7 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
         Record your own voice instead of using AI text-to-speech. Your recording will play when you answer the call.
       </p>
 
-      {!audioURL ? (
+      {!audioURL && !audioBase64 ? (
         <div className="flex flex-col items-center justify-center p-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           {isRecording ? (
             <>
