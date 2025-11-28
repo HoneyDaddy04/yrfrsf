@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { isSupabaseConfigured } from './lib/supabase';
 import ErrorBoundary from './components/ErrorBoundary';
 import AuthPage from './components/auth/AuthPage';
 import OnboardingFlow from './components/auth/OnboardingFlow';
@@ -25,7 +26,7 @@ function LoadingScreen() {
   );
 }
 
-// Protected route wrapper
+// Protected route wrapper (only used when Supabase is configured)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -73,17 +74,63 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function AppRoutes() {
+// Local mode wrapper - shows onboarding if needed, no auth required
+function LocalModeRoute({ children }: { children: React.ReactNode }) {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const settings = localStorage.getItem('aiReminderSettings');
+    const hasCompletedOnboarding = settings ? JSON.parse(settings).onboardingCompleted : false;
+    setShowOnboarding(!hasCompletedOnboarding);
+    setChecking(false);
+  }, []);
+
+  if (checking) {
+    return <LoadingScreen />;
+  }
+
+  if (showOnboarding) {
+    return <OnboardingFlow onComplete={() => setShowOnboarding(false)} />;
+  }
+
+  return <>{children}</>;
+}
+
+// Routes when Supabase IS configured (with auth)
+function AuthenticatedRoutes() {
+  return (
+    <AuthProvider>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<PublicRoute><AuthPage /></PublicRoute>} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
+
+        {/* Protected routes */}
+        <Route path="/" element={<ProtectedRoute><App /></ProtectedRoute>} />
+        <Route path="/reset-password" element={<ProtectedRoute><App /></ProtectedRoute>} />
+
+        {/* Catch all - redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
+  );
+}
+
+// Routes when Supabase is NOT configured (local mode, no auth)
+function LocalRoutes() {
   return (
     <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={<PublicRoute><AuthPage /></PublicRoute>} />
+      {/* Legal pages still accessible */}
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
 
-      {/* Protected routes */}
-      <Route path="/" element={<ProtectedRoute><App /></ProtectedRoute>} />
-      <Route path="/reset-password" element={<ProtectedRoute><App /></ProtectedRoute>} />
+      {/* Main app - no auth required */}
+      <Route path="/" element={<LocalModeRoute><App /></LocalModeRoute>} />
+
+      {/* Redirect login to home in local mode */}
+      <Route path="/login" element={<Navigate to="/" replace />} />
 
       {/* Catch all - redirect to home */}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -95,9 +142,7 @@ export default function AppRouter() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
+        {isSupabaseConfigured ? <AuthenticatedRoutes /> : <LocalRoutes />}
       </BrowserRouter>
     </ErrorBoundary>
   );

@@ -1,15 +1,22 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // These will be replaced with your actual Supabase credentials
 // Get them from: https://supabase.com/dashboard/project/_/settings/api
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env');
+// Check if Supabase is configured
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+
+if (!isSupabaseConfigured) {
+  console.warn('Supabase credentials not configured. Running in local-only mode.');
+  console.warn('To enable cloud sync, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create a dummy client if not configured to prevent crashes
+export const supabase: SupabaseClient = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : createClient('https://placeholder.supabase.co', 'placeholder-key');
 
 // Database types for TypeScript
 export interface DbReminder {
