@@ -2,7 +2,7 @@
 -- Creates tables for the group reminders feature
 
 -- ============================================================================
--- REMINDER GROUPS TABLE
+-- REMINDER GROUPS TABLE (created first without policies)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.reminder_groups (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -15,41 +15,8 @@ CREATE TABLE IF NOT EXISTS public.reminder_groups (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Enable Row Level Security
+-- Enable Row Level Security (policies added after group_members table exists)
 ALTER TABLE public.reminder_groups ENABLE ROW LEVEL SECURITY;
-
--- Users can view groups they're members of (policy will check group_members)
-DROP POLICY IF EXISTS "Users can view their groups" ON public.reminder_groups;
-CREATE POLICY "Users can view their groups" ON public.reminder_groups
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.group_members
-      WHERE group_members.group_id = id
-      AND group_members.user_id = auth.uid()
-    )
-  );
-
--- Users can create groups
-DROP POLICY IF EXISTS "Users can create groups" ON public.reminder_groups;
-CREATE POLICY "Users can create groups" ON public.reminder_groups
-  FOR INSERT WITH CHECK (auth.uid() = created_by);
-
--- Group admins can update groups
-DROP POLICY IF EXISTS "Admins can update groups" ON public.reminder_groups;
-CREATE POLICY "Admins can update groups" ON public.reminder_groups
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM public.group_members
-      WHERE group_members.group_id = id
-      AND group_members.user_id = auth.uid()
-      AND group_members.role = 'admin'
-    )
-  );
-
--- Group admins can delete groups
-DROP POLICY IF EXISTS "Admins can delete groups" ON public.reminder_groups;
-CREATE POLICY "Admins can delete groups" ON public.reminder_groups
-  FOR DELETE USING (auth.uid() = created_by);
 
 -- ============================================================================
 -- GROUP MEMBERS TABLE
@@ -69,50 +36,6 @@ CREATE TABLE IF NOT EXISTS public.group_members (
 
 -- Enable Row Level Security
 ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
-
--- Users can view members of groups they belong to
-DROP POLICY IF EXISTS "Users can view group members" ON public.group_members;
-CREATE POLICY "Users can view group members" ON public.group_members
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
-      AND gm.user_id = auth.uid()
-    )
-  );
-
--- Group admins can add members
-DROP POLICY IF EXISTS "Admins can add members" ON public.group_members;
-CREATE POLICY "Admins can add members" ON public.group_members
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
-      AND gm.user_id = auth.uid()
-      AND gm.role = 'admin'
-    )
-    OR NOT EXISTS (
-      SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
-    )
-  );
-
--- Group admins can remove members (or members can leave)
-DROP POLICY IF EXISTS "Admins can remove members" ON public.group_members;
-CREATE POLICY "Admins can remove members" ON public.group_members
-  FOR DELETE USING (
-    auth.uid() = user_id -- Can remove self
-    OR EXISTS (
-      SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
-      AND gm.user_id = auth.uid()
-      AND gm.role = 'admin'
-    )
-  );
-
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON public.group_members(group_id);
-CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON public.group_members(user_id);
 
 -- ============================================================================
 -- GROUP REMINDERS TABLE
@@ -134,55 +57,128 @@ CREATE TABLE IF NOT EXISTS public.group_reminders (
 -- Enable Row Level Security
 ALTER TABLE public.group_reminders ENABLE ROW LEVEL SECURITY;
 
--- Users can view reminders for groups they belong to
+-- ============================================================================
+-- NOW ADD ALL POLICIES (after all tables exist)
+-- ============================================================================
+
+-- REMINDER GROUPS POLICIES
+DROP POLICY IF EXISTS "Users can view their groups" ON public.reminder_groups;
+CREATE POLICY "Users can view their groups" ON public.reminder_groups
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.group_members
+      WHERE group_members.group_id = id
+      AND group_members.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Users can create groups" ON public.reminder_groups;
+CREATE POLICY "Users can create groups" ON public.reminder_groups
+  FOR INSERT WITH CHECK (auth.uid() = created_by);
+
+DROP POLICY IF EXISTS "Admins can update groups" ON public.reminder_groups;
+CREATE POLICY "Admins can update groups" ON public.reminder_groups
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.group_members
+      WHERE group_members.group_id = id
+      AND group_members.user_id = auth.uid()
+      AND group_members.role = 'admin'
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can delete groups" ON public.reminder_groups;
+CREATE POLICY "Admins can delete groups" ON public.reminder_groups
+  FOR DELETE USING (auth.uid() = created_by);
+
+-- GROUP MEMBERS POLICIES
+DROP POLICY IF EXISTS "Users can view group members" ON public.group_members;
+CREATE POLICY "Users can view group members" ON public.group_members
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = group_members.group_id
+      AND gm.user_id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can add members" ON public.group_members;
+CREATE POLICY "Admins can add members" ON public.group_members
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = group_members.group_id
+      AND gm.user_id = auth.uid()
+      AND gm.role = 'admin'
+    )
+    OR NOT EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = group_members.group_id
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can remove members" ON public.group_members;
+CREATE POLICY "Admins can remove members" ON public.group_members
+  FOR DELETE USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = group_members.group_id
+      AND gm.user_id = auth.uid()
+      AND gm.role = 'admin'
+    )
+  );
+
+-- GROUP REMINDERS POLICIES
 DROP POLICY IF EXISTS "Users can view group reminders" ON public.group_reminders;
 CREATE POLICY "Users can view group reminders" ON public.group_reminders
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
+      WHERE gm.group_id = group_reminders.group_id
       AND gm.user_id = auth.uid()
     )
   );
 
--- Group members can create reminders
 DROP POLICY IF EXISTS "Members can create reminders" ON public.group_reminders;
 CREATE POLICY "Members can create reminders" ON public.group_reminders
   FOR INSERT WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
+      WHERE gm.group_id = group_reminders.group_id
       AND gm.user_id = auth.uid()
     )
   );
 
--- Reminder creators or admins can update
 DROP POLICY IF EXISTS "Creators can update reminders" ON public.group_reminders;
 CREATE POLICY "Creators can update reminders" ON public.group_reminders
   FOR UPDATE USING (
     auth.uid() = created_by
     OR EXISTS (
       SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
+      WHERE gm.group_id = group_reminders.group_id
       AND gm.user_id = auth.uid()
       AND gm.role = 'admin'
     )
   );
 
--- Reminder creators or admins can delete
 DROP POLICY IF EXISTS "Creators can delete reminders" ON public.group_reminders;
 CREATE POLICY "Creators can delete reminders" ON public.group_reminders
   FOR DELETE USING (
     auth.uid() = created_by
     OR EXISTS (
       SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_id
+      WHERE gm.group_id = group_reminders.group_id
       AND gm.user_id = auth.uid()
       AND gm.role = 'admin'
     )
   );
 
--- Indexes
+-- ============================================================================
+-- INDEXES
+-- ============================================================================
+CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON public.group_members(group_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON public.group_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_group_reminders_group_id ON public.group_reminders(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_reminders_next_trigger ON public.group_reminders(next_trigger);
 CREATE INDEX IF NOT EXISTS idx_group_reminders_active ON public.group_reminders(active);
@@ -239,7 +235,9 @@ CREATE TRIGGER trigger_update_reminder_count
 AFTER INSERT OR DELETE ON public.group_reminders
 FOR EACH ROW EXECUTE FUNCTION update_group_reminder_count();
 
--- Grant permissions
+-- ============================================================================
+-- GRANT PERMISSIONS
+-- ============================================================================
 GRANT ALL ON public.reminder_groups TO authenticated;
 GRANT ALL ON public.group_members TO authenticated;
 GRANT ALL ON public.group_reminders TO authenticated;
