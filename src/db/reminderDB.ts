@@ -391,15 +391,20 @@ export async function exportRemindersJSON(): Promise<string> {
  * Optionally clear existing reminders first.
  */
 export async function importRemindersJSON(
-  json: string, 
+  json: string,
   clearExisting: boolean = false
 ): Promise<number> {
-  const reminders: Reminder[] = JSON.parse(json);
-  
+  let reminders: Reminder[];
+  try {
+    reminders = JSON.parse(json);
+  } catch {
+    throw new Error('Invalid JSON format');
+  }
+
   if (clearExisting) {
     await clearAllReminders();
   }
-  
+
   await addReminders(reminders);
   return reminders.length;
 }

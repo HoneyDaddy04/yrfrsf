@@ -36,8 +36,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && user) {
       // Check if user has completed onboarding
-      const settings = localStorage.getItem('aiReminderSettings');
-      const hasCompletedOnboarding = settings ? JSON.parse(settings).onboardingCompleted : false;
+      let hasCompletedOnboarding = false;
+      try {
+        const settings = localStorage.getItem('aiReminderSettings');
+        hasCompletedOnboarding = settings ? JSON.parse(settings).onboardingCompleted : false;
+      } catch {
+        // Default to not completed if parse fails
+      }
       setShowOnboarding(!hasCompletedOnboarding);
       setCheckingOnboarding(false);
     } else if (!loading && !user) {
@@ -81,8 +86,13 @@ function LocalModeRoute({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const settings = localStorage.getItem('aiReminderSettings');
-    const hasCompletedOnboarding = settings ? JSON.parse(settings).onboardingCompleted : false;
+    let hasCompletedOnboarding = false;
+    try {
+      const settings = localStorage.getItem('aiReminderSettings');
+      hasCompletedOnboarding = settings ? JSON.parse(settings).onboardingCompleted : false;
+    } catch {
+      // Default to not completed if parse fails
+    }
     setShowOnboarding(!hasCompletedOnboarding);
     setChecking(false);
   }, []);

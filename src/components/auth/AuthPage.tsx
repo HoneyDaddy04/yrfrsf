@@ -68,8 +68,8 @@ export default function AuthPage() {
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Yrfrsf</h1>
-          <p className="text-gray-600 mt-2">Your Future Self Reminder</p>
+          <h1 className="text-3xl font-bold text-gray-900">YFS</h1>
+          <p className="text-gray-600 mt-2">Your Future Self is Calling</p>
         </div>
 
         {/* Auth Card */}

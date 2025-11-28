@@ -12,7 +12,7 @@ const steps = [
   {
     id: 1,
     icon: Bell,
-    title: 'Welcome to Yrfrsf',
+    title: 'Welcome to YFS',
     description: 'Your Future Self Reminder - an app that calls you like your future self to keep you on track.',
     color: 'from-indigo-500 to-purple-500',
   },
@@ -57,9 +57,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         });
       }
       // Also save locally for immediate use
-      const settings = JSON.parse(localStorage.getItem('aiReminderSettings') || '{}');
-      settings.onboardingCompleted = true;
-      settings.notificationsEnabled = notificationsEnabled;
+      let settings = {};
+      try {
+        settings = JSON.parse(localStorage.getItem('aiReminderSettings') || '{}');
+      } catch {
+        // Use empty object if parse fails
+      }
+      (settings as Record<string, unknown>).onboardingCompleted = true;
+      (settings as Record<string, unknown>).notificationsEnabled = notificationsEnabled;
       localStorage.setItem('aiReminderSettings', JSON.stringify(settings));
 
       onComplete();
@@ -177,8 +182,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             {currentStep < steps.length - 1 && (
               <button
                 onClick={() => {
-                  const settings = JSON.parse(localStorage.getItem('aiReminderSettings') || '{}');
-                  settings.onboardingCompleted = true;
+                  let settings = {};
+                  try {
+                    settings = JSON.parse(localStorage.getItem('aiReminderSettings') || '{}');
+                  } catch {
+                    // Use empty object if parse fails
+                  }
+                  (settings as Record<string, unknown>).onboardingCompleted = true;
                   localStorage.setItem('aiReminderSettings', JSON.stringify(settings));
                   onComplete();
                 }}

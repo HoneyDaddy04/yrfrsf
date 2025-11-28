@@ -59,7 +59,7 @@ export default function ComingSoonModal({ onClose }: ComingSoonModalProps) {
         <div className="p-6 space-y-6">
           <div className="text-center mb-8">
             <p className="text-gray-600">
-              We're constantly working to make Yrfrsf better. Here's what's in the pipeline:
+              We're constantly working to make YFS better. Here's what's in the pipeline:
             </p>
           </div>
 

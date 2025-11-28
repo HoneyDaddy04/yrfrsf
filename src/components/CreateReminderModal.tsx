@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Save, AlertCircle, User, Users, Plus, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Save, AlertCircle, User, Users, Plus, Trash2, UsersRound } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { addReminder } from '../db/reminderDB';
 import { computeNextTrigger, validateReminder, RepeatType } from '../utils/reminderScheduler';
@@ -7,14 +7,21 @@ import AudioRecorder from './AudioRecorder';
 import UserSearch from './UserSearch';
 import { useAuth } from '../contexts/AuthContext';
 import { saveReminderToSupabase, UserProfile } from '../services/supabaseSync';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface CreateReminderModalProps {
   onClose: () => void;
   onReminderCreated: () => void;
 }
 
-type RecipientType = 'self' | 'someone';
+type RecipientType = 'self' | 'someone' | 'group';
 type CustomRepeatType = 'every_x_hours' | 'specific_times' | 'specific_days';
+
+interface ReminderGroup {
+  id: string;
+  name: string;
+  member_count: number;
+}
 
 // Get current time formatted as HH:MM
 const getCurrentTime = () => {
@@ -50,6 +57,54 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
   const [specificTimes, setSpecificTimes] = useState<string[]>(() => [getCurrentTime()]);
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri default
 
+  // Groups
+  const [groups, setGroups] = useState<ReminderGroup[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<ReminderGroup | null>(null);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  // Fetch user's groups when "group" is selected
+  useEffect(() => {
+    if (recipientType === 'group' && user && isSupabaseConfigured) {
+      fetchGroups();
+    }
+  }, [recipientType, user]);
+
+  const fetchGroups = async () => {
+    if (!user) return;
+    setLoadingGroups(true);
+
+    try {
+      // Get groups where user is a member
+      const { data: membershipData, error: memberError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', user.id);
+
+      if (memberError) throw memberError;
+
+      if (!membershipData || membershipData.length === 0) {
+        setGroups([]);
+        setLoadingGroups(false);
+        return;
+      }
+
+      const groupIds = membershipData.map((m) => m.group_id);
+
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('reminder_groups')
+        .select('id, name, member_count')
+        .in('id', groupIds);
+
+      if (groupsError) throw groupsError;
+
+      setGroups(groupsData || []);
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -58,6 +113,12 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
     // Validate recipient selection
     if (recipientType === 'someone' && !selectedRecipient) {
       setError('Please select a recipient for the reminder');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (recipientType === 'group' && !selectedGroup) {
+      setError('Please select a group for the reminder');
       setIsSubmitting(false);
       return;
     }
@@ -125,6 +186,7 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
       reminder.nextTrigger = computeNextTrigger(reminder);
 
       const isForSelf = recipientType === 'self';
+      const isForGroup = recipientType === 'group';
 
       if (isForSelf) {
         // Save locally for self reminders
@@ -132,27 +194,52 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
         console.log('✅ Reminder created (self):', reminder.title);
       }
 
-      // Sync to Supabase (for both self and others)
-      if (user) {
-        const senderName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Someone';
-        const { error: syncError } = await saveReminderToSupabase(
-          reminder,
-          user.id,
-          isForSelf ? undefined : selectedRecipient?.id,
-          isForSelf ? undefined : selectedRecipient?.email || undefined,
-          isForSelf ? undefined : senderName
-        );
+      if (isForGroup && selectedGroup && user && isSupabaseConfigured) {
+        // Save to group_reminders table
+        const { error: groupError } = await supabase.from('group_reminders').insert({
+          group_id: selectedGroup.id,
+          title: reminder.title,
+          why: reminder.why || null,
+          time: reminder.time,
+          repeat: reminder.repeat,
+          next_trigger: reminder.nextTrigger,
+          active: true,
+          created_by: user.id,
+        });
 
-        if (syncError) {
-          console.warn('Failed to sync to Supabase:', syncError);
-          // Don't fail the whole operation, just warn
-        } else {
-          console.log('☁️ Reminder synced to Supabase');
+        if (groupError) {
+          console.error('Failed to create group reminder:', groupError);
+          setError('Failed to create group reminder. Please try again.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        console.log('✅ Group reminder created for:', selectedGroup.name);
+      } else if (!isForGroup) {
+        // Sync to Supabase (for both self and others)
+        if (user) {
+          const senderName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Someone';
+          const { error: syncError } = await saveReminderToSupabase(
+            reminder,
+            user.id,
+            isForSelf ? undefined : selectedRecipient?.id,
+            isForSelf ? undefined : selectedRecipient?.email || undefined,
+            isForSelf ? undefined : senderName
+          );
+
+          if (syncError) {
+            console.warn('Failed to sync to Supabase:', syncError);
+            // Don't fail the whole operation, just warn
+          } else {
+            console.log('☁️ Reminder synced to Supabase');
+          }
         }
       }
 
       console.log('📅 Next trigger:', new Date(reminder.nextTrigger).toLocaleString());
-      if (!isForSelf) {
+      if (isForGroup) {
+        console.log('📨 Reminder will be sent to group:', selectedGroup?.name);
+      } else if (!isForSelf) {
         console.log('📨 Reminder will be sent to:', selectedRecipient?.email);
       }
 
@@ -191,12 +278,13 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
           {/* Recipient Type Toggle */}
           <div>
             <label className="label">Who is this reminder for?</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setRecipientType('self');
                   setSelectedRecipient(null);
+                  setSelectedGroup(null);
                 }}
                 className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
                   recipientType === 'self'
@@ -209,7 +297,10 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
               </button>
               <button
                 type="button"
-                onClick={() => setRecipientType('someone')}
+                onClick={() => {
+                  setRecipientType('someone');
+                  setSelectedGroup(null);
+                }}
                 className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
                   recipientType === 'someone'
                     ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
@@ -217,7 +308,22 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
                 }`}
               >
                 <Users className="w-4 h-4" />
-                <span className="font-medium text-sm">Someone Else</span>
+                <span className="font-medium text-sm">Someone</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRecipientType('group');
+                  setSelectedRecipient(null);
+                }}
+                className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                  recipientType === 'group'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                }`}
+              >
+                <UsersRound className="w-4 h-4" />
+                <span className="font-medium text-sm">Group</span>
               </button>
             </div>
           </div>
@@ -231,10 +337,55 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
               <UserSearch
                 onSelectUser={setSelectedRecipient}
                 selectedUser={selectedRecipient}
+                allowInvite={true}
               />
               <p className="mt-2 text-xs text-gray-500">
                 The person must have an account to receive reminder calls
               </p>
+            </div>
+          )}
+
+          {/* Group Selection (only shown when "Group" is selected) */}
+          {recipientType === 'group' && (
+            <div>
+              <label className="label">
+                Select group <span className="text-red-500">*</span>
+              </label>
+              {loadingGroups ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="ml-2 text-sm text-gray-500">Loading groups...</span>
+                </div>
+              ) : groups.length === 0 ? (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
+                  <UsersRound className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600">You're not a member of any groups yet.</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Go to the Groups tab to create or join a group.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <select
+                    value={selectedGroup?.id || ''}
+                    onChange={(e) => {
+                      const group = groups.find((g) => g.id === e.target.value);
+                      setSelectedGroup(group || null);
+                    }}
+                    className="input"
+                  >
+                    <option value="">Select a group...</option>
+                    {groups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name} ({group.member_count} member{group.member_count !== 1 ? 's' : ''})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-xs text-gray-500">
+                    All group members will receive this reminder
+                  </p>
+                </>
+              )}
             </div>
           )}
 

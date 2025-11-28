@@ -31,12 +31,15 @@ export default function FeedbackModal({ onClose }: FeedbackModalProps) {
       timestamp: Date.now(),
     };
 
-    const existingFeedback = localStorage.getItem('userFeedback');
-    const feedbackList = existingFeedback ? JSON.parse(existingFeedback) : [];
+    let feedbackList: unknown[] = [];
+    try {
+      const existingFeedback = localStorage.getItem('userFeedback');
+      feedbackList = existingFeedback ? JSON.parse(existingFeedback) : [];
+    } catch {
+      // Use empty array if parse fails
+    }
     feedbackList.push(feedback);
     localStorage.setItem('userFeedback', JSON.stringify(feedbackList));
-
-    console.log('📝 Feedback submitted:', feedback);
 
     setSubmitted(true);
     setTimeout(() => {
@@ -53,7 +56,7 @@ export default function FeedbackModal({ onClose }: FeedbackModalProps) {
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h3>
           <p className="text-gray-600">
-            Your feedback has been received. We appreciate you taking the time to help us improve Yrfrsf!
+            Your feedback has been received. We appreciate you taking the time to help us improve YFS!
           </p>
         </div>
       </div>
@@ -132,7 +135,7 @@ export default function FeedbackModal({ onClose }: FeedbackModalProps) {
                   : type === 'bug'
                   ? 'Describe the bug and steps to reproduce...'
                   : type === 'appreciation'
-                  ? 'Share what you love about Yrfrsf...'
+                  ? 'Share what you love about YFS...'
                   : 'Share your thoughts...'
               }
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"

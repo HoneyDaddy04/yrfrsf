@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, User, X, Loader2, Star, UserPlus } from 'lucide-react';
+import { Search, User, X, Loader2, Star, UserPlus, Mail, Send, Copy, Check } from 'lucide-react';
 import { searchUsersByEmail, searchContacts, addContact, UserProfile } from '../services/supabaseSync';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -7,6 +7,8 @@ interface UserSearchProps {
   onSelectUser: (user: UserProfile | null) => void;
   selectedUser: UserProfile | null;
   selectedNickname?: string;
+  allowInvite?: boolean; // Enable invite functionality
+  onInviteSent?: (email: string) => void; // Callback when invite is sent
 }
 
 interface SearchResult {
@@ -20,7 +22,7 @@ interface SearchResult {
   contact_user_id?: string | null;
 }
 
-export default function UserSearch({ onSelectUser, selectedUser, selectedNickname }: UserSearchProps) {
+export default function UserSearch({ onSelectUser, selectedUser, selectedNickname, allowInvite = true, onInviteSent }: UserSearchProps) {
   const { user: currentUser } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -30,8 +32,22 @@ export default function UserSearch({ onSelectUser, selectedUser, selectedNicknam
   const [newNickname, setNewNickname] = useState('');
   const [savingContact, setSavingContact] = useState(false);
   const [displayNickname, setDisplayNickname] = useState(selectedNickname || '');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper to check if string is valid email
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  // Get app URL for invite link
+  const getInviteLink = () => {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/login?ref=invite&from=${encodeURIComponent(currentUser?.email || '')}`;
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -285,15 +301,224 @@ export default function UserSearch({ onSelectUser, selectedUser, selectedNicknam
         </div>
       )}
 
-      {/* No Results Message */}
+      {/* No Results Message with Invite Option */}
       {showResults && results.length === 0 && query.length >= 3 && !isSearching && (
         <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-500 text-center">
             No contacts or users found
           </p>
-          <p className="text-xs text-gray-400 text-center mt-1">
-            They need to have the app to receive reminders
-          </p>
+          {allowInvite && (
+            <>
+              <p className="text-xs text-gray-400 text-center mt-1 mb-3">
+                They need to have the app to receive reminders
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setInviteEmail(isValidEmail(query) ? query : '');
+                  setShowInviteModal(true);
+                  setShowResults(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                <Mail className="w-4 h-4" />
+                Invite Someone
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Invite Someone</h2>
+                  <p className="text-sm text-gray-500">Share YFS with friends</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteEmail('');
+                  setInviteSent(false);
+                  setLinkCopied(false);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {inviteSent ? (
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                    <Check className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Invite Sent!</h3>
+                  <p className="text-sm text-gray-600">
+                    We've sent an invitation to {inviteEmail}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Email Invite */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Send invite by email
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="friend@example.com"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!isValidEmail(inviteEmail)) return;
+                          setInviteSending(true);
+
+                          // For now, we'll use mailto as a fallback
+                          // In production, you'd call a Supabase Edge Function or API
+                          const subject = encodeURIComponent(`${currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Someone'} invited you to YFS`);
+                          const body = encodeURIComponent(
+                            `Hey!\n\nI'm using YFS - Your Future Self is Calling! It's an AI-powered reminder app that calls you like your future self. I'd love for you to join so we can be accountability partners!\n\nSign up here: ${getInviteLink()}\n\nSee you there!`
+                          );
+                          window.open(`mailto:${inviteEmail}?subject=${subject}&body=${body}`, '_blank');
+
+                          setTimeout(() => {
+                            setInviteSending(false);
+                            setInviteSent(true);
+                            onInviteSent?.(inviteEmail);
+                          }, 500);
+                        }}
+                        disabled={!isValidEmail(inviteEmail) || inviteSending}
+                        className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {inviteSending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                        Send
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200"></div>
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span className="px-2 bg-white text-sm text-gray-500">or</span>
+                    </div>
+                  </div>
+
+                  {/* Copy Link */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Share invite link
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={getInviteLink()}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm text-gray-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(getInviteLink());
+                          setLinkCopied(true);
+                          setTimeout(() => setLinkCopied(false), 2000);
+                        }}
+                        className={`px-4 py-2 font-medium rounded-lg flex items-center gap-2 transition-colors ${
+                          linkCopied
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {linkCopied ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4" />
+                            Copy
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Share via apps */}
+                  <div className="pt-2">
+                    <p className="text-sm text-gray-500 mb-3">Share via</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const text = encodeURIComponent(`Join me on YFS - Your Future Self is Calling! ${getInviteLink()}`);
+                          window.open(`https://wa.me/?text=${text}`, '_blank');
+                        }}
+                        className="flex-1 px-3 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600"
+                      >
+                        WhatsApp
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const text = encodeURIComponent(`Join me on YFS - Your Future Self is Calling! ${getInviteLink()}`);
+                          window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
+                        }}
+                        className="flex-1 px-3 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800"
+                      >
+                        X / Twitter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const text = encodeURIComponent(`Join me on YFS - Your Future Self is Calling! ${getInviteLink()}`);
+                          window.open(`sms:?body=${text}`, '_blank');
+                        }}
+                        className="flex-1 px-3 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600"
+                      >
+                        SMS
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteEmail('');
+                  setInviteSent(false);
+                  setLinkCopied(false);
+                }}
+                className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
+              >
+                {inviteSent ? 'Done' : 'Cancel'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

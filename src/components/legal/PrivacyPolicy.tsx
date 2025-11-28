@@ -22,7 +22,7 @@ export default function PrivacyPolicy() {
           <div className="prose prose-indigo max-w-none">
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">1. Information We Collect</h2>
             <p className="text-gray-600 mb-4">
-              When you use Yrfrsf, we collect the following information:
+              When you use YFS, we collect the following information:
             </p>
             <ul className="list-disc pl-6 text-gray-600 space-y-2 mb-4">
               <li><strong>Account Information:</strong> Email address, name (optional), and password when you create an account.</li>
@@ -36,7 +36,7 @@ export default function PrivacyPolicy() {
               We use the collected information to:
             </p>
             <ul className="list-disc pl-6 text-gray-600 space-y-2 mb-4">
-              <li>Provide and maintain the Yrfrsf service</li>
+              <li>Provide and maintain the YFS service</li>
               <li>Send you reminder notifications at your scheduled times</li>
               <li>Sync your data across devices when you're logged in</li>
               <li>Improve and personalize your experience</li>
@@ -86,7 +86,7 @@ export default function PrivacyPolicy() {
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">7. Children's Privacy</h2>
             <p className="text-gray-600 mb-4">
-              Yrfrsf is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13.
+              YFS is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13.
             </p>
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">8. Changes to This Policy</h2>
@@ -99,7 +99,7 @@ export default function PrivacyPolicy() {
               If you have any questions about this Privacy Policy, please contact us at:
             </p>
             <p className="text-gray-600 mb-4">
-              Email: privacy@yrfrsf.com
+              Email: privacy@yfsapp.com
             </p>
           </div>
         </div>

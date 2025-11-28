@@ -105,15 +105,18 @@ CREATE POLICY "Users can view group members" ON public.group_members
 DROP POLICY IF EXISTS "Admins can add members" ON public.group_members;
 CREATE POLICY "Admins can add members" ON public.group_members
   FOR INSERT WITH CHECK (
+    -- Allow if user is the group creator (first member adds themselves)
     EXISTS (
+      SELECT 1 FROM public.reminder_groups rg
+      WHERE rg.id = group_id
+      AND rg.created_by = auth.uid()
+    )
+    -- Or if user is already an admin of this group
+    OR EXISTS (
       SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_members.group_id
+      WHERE gm.group_id = group_id
       AND gm.user_id = auth.uid()
       AND gm.role = 'admin'
-    )
-    OR NOT EXISTS (
-      SELECT 1 FROM public.group_members gm
-      WHERE gm.group_id = group_members.group_id
     )
   );
 

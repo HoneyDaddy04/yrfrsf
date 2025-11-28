@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Reminder } from '../utils/reminderScheduler';
 import { addCallHistory, updateCallHistory, CallHistoryEntry } from '../db/reminderDB';
@@ -20,12 +20,12 @@ export function useCallManager() {
   const [currentCallHistory, setCurrentCallHistory] = useState<CallHistoryEntry | null>(null);
 
   // Use ref to keep track of current call history for event handlers
-  const callHistoryRef = useState<CallHistoryEntry | null>(null);
+  const callHistoryRef = useRef<CallHistoryEntry | null>(null);
 
   // Update ref whenever currentCallHistory changes
   useEffect(() => {
-    callHistoryRef[0] = currentCallHistory;
-  }, [currentCallHistory, callHistoryRef]);
+    callHistoryRef.current = currentCallHistory;
+  }, [currentCallHistory]);
 
   useEffect(() => {
     const handleReminderTriggered = async (event: CustomEvent) => {
@@ -60,7 +60,7 @@ export function useCallManager() {
       setIsAISpeaking(false);
       // Auto-end call after AI finishes speaking - save duration immediately
       setTimeout(async () => {
-        const callHistory = callHistoryRef[0];
+        const callHistory = callHistoryRef.current;
         if (callHistory) {
           const endedAt = Date.now();
           const duration = callHistory.answeredAt
@@ -168,8 +168,13 @@ export function useCallManager() {
         }
       } else {
         // Use TTS (browser or OpenAI based on settings)
-        const settingsStr = localStorage.getItem('aiReminderSettings');
-        const settings = settingsStr ? JSON.parse(settingsStr) : null;
+        let settings = null;
+        try {
+          const settingsStr = localStorage.getItem('aiReminderSettings');
+          settings = settingsStr ? JSON.parse(settingsStr) : null;
+        } catch {
+          // Use default settings if parse fails
+        }
         const speechText = generateReminderSpeech(currentReminder.title, currentReminder.why);
 
         // Dispatch speaking start event

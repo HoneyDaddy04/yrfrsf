@@ -15,6 +15,20 @@ interface HeaderProps {
   onTabChange?: (tab: TabType) => void;
 }
 
+// Check if beta features are enabled
+function isBetaEnabled(feature: string): boolean {
+  try {
+    const settings = localStorage.getItem('aiReminderSettings');
+    if (settings) {
+      const parsed = JSON.parse(settings);
+      return parsed.betaFeatures?.[feature] === true;
+    }
+  } catch (e) {
+    // Ignore
+  }
+  return false;
+}
+
 export default function Header({
   onSettingsClick,
   onCallHistoryClick = () => {},
@@ -29,6 +43,27 @@ export default function Header({
   const [locationLabel, setLocationLabel] = useState<string>('');
   const [locLoading, setLocLoading] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showPartners, setShowPartners] = useState(false);
+
+  // Check beta features on mount and when settings change
+  useEffect(() => {
+    const checkBeta = () => setShowPartners(isBetaEnabled('partners'));
+    checkBeta();
+
+    // Listen for settings changes
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'aiReminderSettings') checkBeta();
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // Also check periodically in case settings changed in same tab
+    const interval = setInterval(checkBeta, 2000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Update time every second
   useEffect(() => {
@@ -92,11 +127,12 @@ export default function Header({
     hour12: true,
   });
 
+  // Build nav items conditionally based on beta features
   const navItems: { id: TabType; icon: typeof Home; label: string }[] = [
     { id: 'home', icon: Home, label: 'Home' },
     { id: 'reminders', icon: List, label: 'Reminders' },
     { id: 'insights', icon: TrendingUp, label: 'Insights' },
-    { id: 'partners', icon: UserCheck, label: 'Partners' },
+    ...(showPartners ? [{ id: 'partners' as TabType, icon: UserCheck, label: 'Partners' }] : []),
     { id: 'groups', icon: Users, label: 'Groups' },
   ];
 
@@ -121,9 +157,14 @@ export default function Header({
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center">
                 <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-              <span className="ml-2 sm:ml-3 text-lg sm:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Yrfrsf
-              </span>
+              <div className="ml-2 sm:ml-3 flex flex-col">
+                <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent leading-tight">
+                  YFS
+                </span>
+                <span className="text-[9px] sm:text-[10px] text-gray-500 font-medium -mt-0.5 hidden sm:block">
+                  Your Future Self is Calling
+                </span>
+              </div>
             </div>
 
             {/* Desktop Navigation */}

@@ -15,11 +15,15 @@ export default function PanicButton({ onPanic }: PanicButtonProps) {
 
   // Load saved position and minimized state from localStorage
   useEffect(() => {
-    const savedState = localStorage.getItem('panicButtonState');
-    if (savedState) {
-      const { minimized, pos } = JSON.parse(savedState);
-      setIsMinimized(minimized || false);
-      if (pos) setPosition(pos);
+    try {
+      const savedState = localStorage.getItem('panicButtonState');
+      if (savedState) {
+        const { minimized, pos } = JSON.parse(savedState);
+        setIsMinimized(minimized || false);
+        if (pos) setPosition(pos);
+      }
+    } catch {
+      // Use defaults if parse fails
     }
   }, []);
 

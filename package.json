@@ -1,7 +1,7 @@
 {
-  "name": "ai-reminder-app",
+  "name": "yfs-app",
   "version": "1.0.0",
-  "description": "Browser-based AI reminder app with real-time scheduling",
+  "description": "YFS - Your Future Self is Calling. AI-powered reminders with voice notifications.",
   "type": "module",
   "scripts": {
     "dev": "vite",

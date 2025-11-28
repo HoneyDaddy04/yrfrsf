@@ -288,11 +288,14 @@ function App() {
 
   // Handle panic button - trigger immediate motivational call
   const handlePanic = () => {
-    console.log('🚨 Panic button activated!');
-
     // Load panic audio from settings
-    const savedSettings = localStorage.getItem('aiReminderSettings');
-    const settings = savedSettings ? JSON.parse(savedSettings) : null;
+    let settings = null;
+    try {
+      const savedSettings = localStorage.getItem('aiReminderSettings');
+      settings = savedSettings ? JSON.parse(savedSettings) : null;
+    } catch {
+      // Use default settings if parse fails
+    }
     const panicAudio = settings?.panicAudio;
 
     // Create a special panic reminder
@@ -623,7 +626,7 @@ function App() {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
               <p className="text-gray-600 text-sm">
-                © 2025 Yrfrsf
+                © 2025 YFS
               </p>
               <div className="flex items-center gap-3 text-sm">
                 <button

@@ -1,7 +1,7 @@
 {
-  "name": "Yrfrsf - Your Future Self Reminder",
-  "short_name": "Yrfrsf",
-  "description": "Smart AI-powered reminders that call you like your future self. Never miss important tasks with voice notifications.",
+  "name": "YFS - Your Future Self is Calling",
+  "short_name": "YFS",
+  "description": "Your Future Self is Calling. AI-powered reminders that call you with voice notifications. Never miss important tasks.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

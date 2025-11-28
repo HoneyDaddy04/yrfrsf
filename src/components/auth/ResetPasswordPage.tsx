@@ -75,7 +75,7 @@ export default function ResetPasswordPage() {
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Yrfrsf</h1>
+          <h1 className="text-3xl font-bold text-gray-900">YFS</h1>
           <p className="text-gray-600 mt-2">Set your new password</p>
         </div>
 

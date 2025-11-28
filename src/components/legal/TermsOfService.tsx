@@ -22,12 +22,12 @@ export default function TermsOfService() {
           <div className="prose prose-indigo max-w-none">
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">1. Acceptance of Terms</h2>
             <p className="text-gray-600 mb-4">
-              By accessing or using Yrfrsf ("the Service"), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Service.
+              By accessing or using YFS ("the Service"), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Service.
             </p>
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">2. Description of Service</h2>
             <p className="text-gray-600 mb-4">
-              Yrfrsf is a reminder application that provides AI-powered voice notifications to help users stay on track with their tasks and goals. The Service includes:
+              YFS is a reminder application that provides AI-powered voice notifications to help users stay on track with their tasks and goals. The Service includes:
             </p>
             <ul className="list-disc pl-6 text-gray-600 space-y-2 mb-4">
               <li>Creating and managing reminders</li>
@@ -73,7 +73,7 @@ export default function TermsOfService() {
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">6. Intellectual Property</h2>
             <p className="text-gray-600 mb-4">
-              The Service and its original content, features, and functionality are owned by Yrfrsf and are protected by international copyright, trademark, and other intellectual property laws.
+              The Service and its original content, features, and functionality are owned by YFS and are protected by international copyright, trademark, and other intellectual property laws.
             </p>
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">7. User Content</h2>
@@ -88,7 +88,7 @@ export default function TermsOfService() {
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">9. Limitation of Liability</h2>
             <p className="text-gray-600 mb-4">
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, YRFRSF SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY.
+              TO THE MAXIMUM EXTENT PERMITTED BY LAW, YFS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY.
             </p>
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">10. Termination</h2>
@@ -103,7 +103,7 @@ export default function TermsOfService() {
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">12. Governing Law</h2>
             <p className="text-gray-600 mb-4">
-              These Terms shall be governed by and construed in accordance with the laws of the jurisdiction in which Yrfrsf operates, without regard to conflict of law principles.
+              These Terms shall be governed by and construed in accordance with the laws of the jurisdiction in which YFS operates, without regard to conflict of law principles.
             </p>
 
             <h2 className="text-xl font-semibold text-gray-900 mt-6 mb-3">13. Contact Us</h2>
@@ -111,7 +111,7 @@ export default function TermsOfService() {
               If you have any questions about these Terms, please contact us at:
             </p>
             <p className="text-gray-600 mb-4">
-              Email: legal@yrfrsf.com
+              Email: legal@yfsapp.com
             </p>
           </div>
         </div>

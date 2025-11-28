@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload, LogOut, User } from 'lucide-react';
+import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload, LogOut, User, Beaker } from 'lucide-react';
 import { AVAILABLE_RINGTONES, type RingtoneType, generateRingtone } from '../utils/ringtones';
 import { getBrowserVoices, OPENAI_VOICES, previewVoice, type TTSProvider, type BrowserVoice } from '../utils/textToSpeech';
 import { exportAllData, importData, type ExportData } from '../db/reminderDB';
@@ -9,6 +9,10 @@ import { isSupabaseConfigured } from '../lib/supabase';
 
 interface SettingsModalProps {
   onClose: () => void;
+}
+
+interface BetaFeatures {
+  partners: boolean;
 }
 
 interface Settings {
@@ -26,6 +30,8 @@ interface Settings {
   browserRate: number;
   browserPitch: number;
   openaiVoice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+  // Beta Features
+  betaFeatures?: BetaFeatures;
 }
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
@@ -35,13 +41,16 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     apiEndpoint: 'https://api.openai.com/v1/audio/speech',
     voiceEnabled: true,
     notificationsEnabled: true,
-    ringtone: 'chimes',
+    ringtone: 'reflection',
     autoRecallEnabled: true,
     maxRecallAttempts: 0,
     ttsProvider: 'browser',
     browserRate: 1.0,
     browserPitch: 1.0,
     openaiVoice: 'nova',
+    betaFeatures: {
+      partners: false,
+    },
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -74,9 +83,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
   useEffect(() => {
     // Load settings from localStorage
-    const savedSettings = localStorage.getItem('aiReminderSettings');
-    if (savedSettings) {
-      setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
+    try {
+      const savedSettings = localStorage.getItem('aiReminderSettings');
+      if (savedSettings) {
+        setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
+      }
+    } catch {
+      // Use default settings if parse fails
     }
 
     // Load browser voices
@@ -146,7 +159,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `yrfrsf-backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `yfs-backup-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -335,6 +348,38 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Beta Features */}
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Beaker className="w-5 h-5 text-purple-600" />
+                  <span>Beta Features</span>
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">Experimental</span>
+                </div>
+
+                <p className="text-sm text-gray-600">
+                  These features are still in development. Enable them to try them out early.
+                </p>
+
+                <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-100">
+                  <div>
+                    <p className="font-medium text-gray-900">Accountability Partners</p>
+                    <p className="text-sm text-gray-600">Connect with friends who get notified when you miss reminders</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.betaFeatures?.partners || false}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        betaFeatures: { ...settings.betaFeatures, partners: e.target.checked }
+                      })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                  </label>
                 </div>
               </div>
             </>
