@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Clock, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
@@ -24,9 +25,41 @@ import PanicButton from './components/PanicButton';
 import ComingSoonModal from './components/ComingSoonModal';
 import FeedbackModal from './components/FeedbackModal';
 import ReceivedRemindersModal from './components/ReceivedRemindersModal';
+import AccountabilityPartnersPage from './components/AccountabilityPartnersPage';
+import GroupRemindersPage from './components/GroupRemindersPage';
+
+type TabType = 'home' | 'reminders' | 'insights' | 'partners' | 'groups';
+
+// Map URL paths to tab names
+const pathToTab: Record<string, TabType> = {
+  '/': 'home',
+  '/reminders': 'reminders',
+  '/insights': 'insights',
+  '/partners': 'partners',
+  '/groups': 'groups',
+};
+
+// Map tab names to URL paths
+const tabToPath: Record<TabType, string> = {
+  home: '/',
+  reminders: '/reminders',
+  insights: '/insights',
+  partners: '/partners',
+  groups: '/groups',
+};
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'home' | 'reminders' | 'insights'>('home');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Derive active tab from URL
+  const activeTab: TabType = pathToTab[location.pathname] || 'home';
+
+  // Handle tab changes by navigating
+  const handleTabChange = (tab: TabType) => {
+    navigate(tabToPath[tab]);
+  };
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isCallHistoryModalOpen, setIsCallHistoryModalOpen] = useState(false);
@@ -362,7 +395,7 @@ function App() {
         missedCallsCount={missedCalls.length}
         receivedCallsCount={pendingCalls.length}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
       />
 
       {/* Panic Button - Always visible for emergency support */}
@@ -416,8 +449,8 @@ function App() {
                   onCheckIn={handleCheckIn}
                 />
                 <div className="px-6 py-3 bg-gray-50 text-right">
-                  <button 
-                    onClick={() => setActiveTab('reminders')}
+                  <button
+                    onClick={() => handleTabChange('reminders')}
                     className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
                   >
                     View all reminders →
@@ -463,6 +496,26 @@ function App() {
               transition={{ duration: 0.2 }}
             >
               <InsightsPage />
+            </motion.div>
+          ) : activeTab === 'partners' ? (
+            <motion.div
+              key="partners"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AccountabilityPartnersPage />
+            </motion.div>
+          ) : activeTab === 'groups' ? (
+            <motion.div
+              key="groups"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              <GroupRemindersPage />
             </motion.div>
           ) : null}
         </AnimatePresence>

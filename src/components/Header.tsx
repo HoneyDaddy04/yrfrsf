@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Bell, Settings, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus, Phone } from 'lucide-react';
+import { Bell, Settings, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus, Phone, Users, UserCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+type TabType = 'home' | 'reminders' | 'insights' | 'partners' | 'groups';
 
 interface HeaderProps {
   onSettingsClick: () => void;
@@ -9,8 +11,8 @@ interface HeaderProps {
   onReceivedRemindersClick?: () => void;
   missedCallsCount?: number;
   receivedCallsCount?: number;
-  activeTab?: 'home' | 'reminders' | 'insights';
-  onTabChange?: (tab: 'home' | 'reminders' | 'insights') => void;
+  activeTab?: TabType;
+  onTabChange?: (tab: TabType) => void;
 }
 
 export default function Header({
@@ -90,10 +92,12 @@ export default function Header({
     hour12: true,
   });
 
-  const navItems = [
+  const navItems: { id: TabType; icon: typeof Home; label: string }[] = [
     { id: 'home', icon: Home, label: 'Home' },
-    { id: 'reminders', icon: List, label: 'My Reminders' },
+    { id: 'reminders', icon: List, label: 'Reminders' },
     { id: 'insights', icon: TrendingUp, label: 'Insights' },
+    { id: 'partners', icon: UserCheck, label: 'Partners' },
+    { id: 'groups', icon: Users, label: 'Groups' },
   ];
 
   return (
@@ -123,11 +127,11 @@ export default function Header({
             </div>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:ml-8 md:flex md:space-x-8">
+            <nav className="hidden md:ml-6 md:flex md:space-x-4 lg:space-x-6">
               {navItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => onTabChange(item.id as 'home' | 'reminders' | 'insights')}
+                  onClick={() => onTabChange(item.id)}
                   className={`inline-flex items-center px-1 pt-1 text-sm font-medium ${
                     activeTab === item.id
                       ? 'border-b-2 border-indigo-500 text-gray-900'
@@ -230,7 +234,7 @@ export default function Header({
                 <button
                   key={item.id}
                   onClick={() => {
-                    onTabChange(item.id as 'home' | 'reminders' | 'insights');
+                    onTabChange(item.id);
                     setMobileMenuOpen(false);
                   }}
                   className={`w-full flex items-center px-4 py-2 text-base font-medium ${

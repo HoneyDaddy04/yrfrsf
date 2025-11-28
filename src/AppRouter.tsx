@@ -111,8 +111,13 @@ function AuthenticatedRoutes() {
         {/* Password reset - special handling (user is logged in via reset token) */}
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/* Protected routes */}
+        {/* Protected routes - App handles sub-routes internally */}
         <Route path="/" element={<ProtectedRoute><App /></ProtectedRoute>} />
+        <Route path="/reminders" element={<ProtectedRoute><App /></ProtectedRoute>} />
+        <Route path="/insights" element={<ProtectedRoute><App /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><App /></ProtectedRoute>} />
+        <Route path="/partners" element={<ProtectedRoute><App /></ProtectedRoute>} />
+        <Route path="/groups" element={<ProtectedRoute><App /></ProtectedRoute>} />
 
         {/* Catch all - redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -129,8 +134,13 @@ function LocalRoutes() {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
 
-      {/* Main app - no auth required */}
+      {/* Main app - no auth required, App handles sub-routes internally */}
       <Route path="/" element={<LocalModeRoute><App /></LocalModeRoute>} />
+      <Route path="/reminders" element={<LocalModeRoute><App /></LocalModeRoute>} />
+      <Route path="/insights" element={<LocalModeRoute><App /></LocalModeRoute>} />
+      <Route path="/settings" element={<LocalModeRoute><App /></LocalModeRoute>} />
+      <Route path="/partners" element={<LocalModeRoute><App /></LocalModeRoute>} />
+      <Route path="/groups" element={<LocalModeRoute><App /></LocalModeRoute>} />
 
       {/* Redirect login to home in local mode */}
       <Route path="/login" element={<Navigate to="/" replace />} />
