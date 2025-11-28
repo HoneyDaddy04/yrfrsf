@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload } from 'lucide-react';
+import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload, LogOut, User } from 'lucide-react';
 import { AVAILABLE_RINGTONES, type RingtoneType, generateRingtone } from '../utils/ringtones';
 import { getBrowserVoices, OPENAI_VOICES, previewVoice, type TTSProvider, type BrowserVoice } from '../utils/textToSpeech';
 import { exportAllData, importData, type ExportData } from '../db/reminderDB';
 import AudioRecorder from './AudioRecorder';
+import { useAuth } from '../contexts/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -27,6 +29,7 @@ interface Settings {
 }
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
+  const { user, signOut } = useAuth();
   const [settings, setSettings] = useState<Settings>({
     apiKey: '',
     apiEndpoint: 'https://api.openai.com/v1/audio/speech',
@@ -45,8 +48,29 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [browserVoices, setBrowserVoices] = useState<BrowserVoice[]>([]);
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'voice' | 'data'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'voice' | 'data' | 'account'>('general');
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  const handleLogout = async () => {
+    if (!confirm('Are you sure you want to sign out? Your local data will be cleared.')) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+    setLogoutError(null);
+
+    try {
+      await signOut();
+      onClose();
+      // Page will redirect to login via auth state change
+    } catch (error) {
+      console.error('Logout failed:', error);
+      setLogoutError('Failed to sign out. Please try again.');
+      setIsLoggingOut(false);
+    }
+  };
 
   useEffect(() => {
     // Load settings from localStorage
@@ -160,11 +184,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-gray-200 overflow-x-auto">
           {[
             { id: 'general' as const, label: 'General', icon: Bell },
             { id: 'voice' as const, label: 'Voice & Audio', icon: Mic },
             { id: 'data' as const, label: 'Data & Backup', icon: Download },
+            ...(isSupabaseConfigured ? [{ id: 'account' as const, label: 'Account', icon: User }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -556,6 +581,74 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   <p className="text-sm text-yellow-800">
                     <strong>API Key Security:</strong> If you use OpenAI TTS, your API key is stored locally and only used for direct communication with OpenAI's servers. It never passes through our servers.
                   </p>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Account Tab */}
+          {activeTab === 'account' && isSupabaseConfigured && (
+            <>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <User className="w-5 h-5 text-indigo-600" />
+                  <span>Account Information</span>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg space-y-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="font-medium text-gray-900">{user?.email || 'Not available'}</p>
+                  </div>
+                  {user?.user_metadata?.full_name && (
+                    <div>
+                      <p className="text-sm text-gray-500">Name</p>
+                      <p className="font-medium text-gray-900">{user.user_metadata.full_name}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-gray-500">Account Created</p>
+                    <p className="font-medium text-gray-900">
+                      {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Not available'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <LogOut className="w-5 h-5 text-red-600" />
+                  <span>Sign Out</span>
+                </div>
+
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800 mb-4">
+                    Signing out will clear all local data from this device. Your account will remain active, but you'll need to sign in again to access your reminders.
+                  </p>
+
+                  {logoutError && (
+                    <div className="mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-800 text-sm">
+                      {logoutError}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {isLoggingOut ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Signing out...
+                      </>
+                    ) : (
+                      <>
+                        <LogOut className="w-5 h-5" />
+                        Sign Out
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </>

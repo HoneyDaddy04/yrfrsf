@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from './lib/supabase';
 import ErrorBoundary from './components/ErrorBoundary';
 import AuthPage from './components/auth/AuthPage';
 import OnboardingFlow from './components/auth/OnboardingFlow';
+import ResetPasswordPage from './components/auth/ResetPasswordPage';
 import PrivacyPolicy from './components/legal/PrivacyPolicy';
 import TermsOfService from './components/legal/TermsOfService';
 import App from './App';
@@ -107,9 +108,11 @@ function AuthenticatedRoutes() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
 
+        {/* Password reset - special handling (user is logged in via reset token) */}
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+
         {/* Protected routes */}
         <Route path="/" element={<ProtectedRoute><App /></ProtectedRoute>} />
-        <Route path="/reset-password" element={<ProtectedRoute><App /></ProtectedRoute>} />
 
         {/* Catch all - redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { closeDB } from '../db/reminderDB';
 
 interface AuthContextType {
   user: User | null;
@@ -22,12 +23,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Get initial session with error handling
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error('Failed to get session:', error);
+        setLoading(false); // Don't leave user stuck on loading screen
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -71,7 +77,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // Close IndexedDB connection
+      closeDB();
+
+      // Clear local data to prevent data leakage between users
+      const dbName = 'reminder-db';
+      await new Promise<void>((resolve) => {
+        const request = indexedDB.deleteDatabase(dbName);
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve(); // Continue even if deletion fails
+        request.onblocked = () => resolve();
+      });
+
+      // Clear localStorage settings
+      localStorage.removeItem('aiReminderSettings');
+      localStorage.removeItem('yrfrsf-tts-settings');
+
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Sign out error:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Failed to sign out:', error);
+      // Force clear session state even if signOut fails
+      setSession(null);
+      setUser(null);
+      throw error;
+    }
   };
 
   const resetPassword = async (email: string) => {

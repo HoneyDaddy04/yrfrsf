@@ -6,7 +6,15 @@
       "Bash(git push:*)",
       "Bash(npm run build:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nProduction-ready release with PWA, TTS, and Vercel deployment\n\nFeatures added:\n- PWA support with custom icons, manifest, and service worker\n- Browser-based Text-to-Speech (Web Speech API)\n- OpenAI TTS integration with voice selection\n- Data export/import for backup and sync\n- Enhanced settings modal with tabbed interface\n- Vercel deployment configuration\n\nTechnical improvements:\n- Fixed TypeScript errors for production build\n- Enhanced service worker with caching strategies\n- Added proper meta tags for SEO and social sharing\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nProduction-ready release with PWA, TTS, and Vercel deployment\n\nFeatures added:\n- PWA support with custom icons, manifest, and service worker\n- Browser-based Text-to-Speech (Web Speech API)\n- OpenAI TTS integration with voice selection\n- Data export/import for backup and sync\n- Enhanced settings modal with tabbed interface\n- Vercel deployment configuration\n\nTechnical improvements:\n- Fixed TypeScript errors for production build\n- Enhanced service worker with caching strategies\n- Added proper meta tags for SEO and social sharing\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd authentication, onboarding, and production features\n\nAuthentication:\n- Supabase integration for user auth (email/password + Google OAuth)\n- Sign up, login, forgot password flows\n- Protected routes with auth context\n- Session management\n\nUser Experience:\n- Onboarding flow for new users (4-step intro)\n- Error boundary for crash handling\n- Loading states throughout the app\n\nLegal & Compliance:\n- Privacy Policy page\n- Terms of Service page\n- GDPR-ready data handling\n\nDatabase:\n- Supabase SQL schema for all tables (reminders, call_history, etc.)\n- Row Level Security policies for user data isolation\n- Auto-create profile and settings on signup\n\nConfiguration:\n- Environment variables setup (.env.example)\n- TypeScript types for Vite env vars\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(docker --version:*)",
+      "Bash(docker exec:*)",
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Bash(PGPASSWORD=postgres psql:*)",
+      "Bash(vercel --version:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
