@@ -183,8 +183,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
           </button>
         </div>
 
-        {/* Tabs - scrollable on mobile */}
-        <div className="flex border-b border-gray-200 overflow-x-auto scrollbar-hide">
+        {/* Tabs - properly sized for all screens */}
+        <div className="flex border-b border-gray-200 bg-white flex-shrink-0">
           {[
             { id: 'general' as const, label: 'General', icon: Bell },
             { id: 'voice' as const, label: 'Voice', icon: Mic },
@@ -194,14 +194,14 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-shrink-0 flex items-center justify-center gap-1.5 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs sm:text-sm font-medium transition-colors border-b-2 ${
                 activeTab === tab.id
-                  ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'text-indigo-600 border-indigo-600 bg-indigo-50'
+                  : 'text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
-              <tab.icon className="w-4 h-4" />
-              <span className="hidden xs:inline sm:inline">{tab.label}</span>
+              <tab.icon className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{tab.label}</span>
             </button>
           ))}
         </div>
