@@ -8,12 +8,31 @@ let audioContext: AudioContext | null = null;
 let ringtoneBuffer: AudioBuffer | null = null;
 let ringtoneSource: AudioBufferSourceNode | null = null;
 
+// Cleanup audio context to prevent memory leaks
+export const cleanupAudioContext = (): void => {
+  if (ringtoneSource) {
+    try {
+      ringtoneSource.stop();
+    } catch {
+      // Ignore if already stopped
+    }
+    ringtoneSource = null;
+  }
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext.close().catch(() => {
+      // Ignore close errors
+    });
+    audioContext = null;
+    ringtoneBuffer = null;
+  }
+};
+
 // Initialize audio context
 const initAudio = async (): Promise<AudioContext> => {
-  if (!audioContext) {
+  if (!audioContext || audioContext.state === 'closed') {
     // @ts-ignore - webkitAudioContext for Safari
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    audioContext = new AudioContext();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    audioContext = new AudioContextClass();
 
     // Preload ringtone
     try {
@@ -154,15 +173,21 @@ export const showCallNotification = async (caller: string, message: string): Pro
 // Stop all notifications and sounds
 export const stopAllNotifications = (): void => {
   stopRingtone();
-  
+
   // Close all notifications
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistration().then(registration => {
-      if (registration) {
-        registration.getNotifications().then(notifications => {
-          notifications.forEach(notification => notification.close());
-        });
-      }
-    });
+    navigator.serviceWorker.getRegistration()
+      .then(registration => {
+        if (registration) {
+          registration.getNotifications().then(notifications => {
+            notifications.forEach(notification => notification.close());
+          }).catch(err => {
+            console.warn('Failed to get notifications:', err);
+          });
+        }
+      })
+      .catch(err => {
+        console.warn('Failed to get service worker registration:', err);
+      });
   }
 };

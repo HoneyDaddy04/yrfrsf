@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Play, Trash2 } from 'lucide-react';
+import { Mic, Square, Play, Trash2, AlertCircle } from 'lucide-react';
 
 interface AudioRecorderProps {
   onRecordingComplete: (audioBase64: string) => void;
@@ -13,6 +13,7 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
   const [audioBase64, setAudioBase64] = useState<string | null>(existingRecording || null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -31,6 +32,7 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
   }, [audioURL, existingRecording]);
 
   const startRecording = async () => {
+    setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -69,9 +71,9 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Failed to access microphone. Please grant permission.');
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      setError('Failed to access microphone. Please grant permission and try again.');
     }
   };
 
@@ -87,6 +89,7 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
   };
 
   const playRecording = () => {
+    setError(null);
     // Use audioURL (blob) if available, otherwise use base64
     const audioSource = audioURL || audioBase64;
 
@@ -103,10 +106,10 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
         setIsPlaying(false);
       };
 
-      audio.onerror = (e) => {
-        console.error('Audio playback error:', e);
+      audio.onerror = () => {
+        console.error('Audio playback error');
         setIsPlaying(false);
-        alert('Failed to play recording. Please try recording again.');
+        setError('Failed to play recording. Please try recording again.');
       };
 
       audio.play()
@@ -116,7 +119,7 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
         .catch((err) => {
           console.error('Play failed:', err);
           setIsPlaying(false);
-          alert('Failed to play recording. Please try again.');
+          setError('Failed to play recording. Please try again.');
         });
     }
   };
@@ -146,12 +149,28 @@ export default function AudioRecorder({ onRecordingComplete, existingRecording, 
 
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label id="audio-recorder-label" className="block text-sm font-medium text-gray-700 mb-2">
         Custom Voice Message (Optional)
       </label>
       <p className="text-xs text-gray-500 mb-3">
         Record your own voice instead of using AI text-to-speech. Your recording will play when you answer the call.
       </p>
+
+      {/* Error Message */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {!audioURL && !audioBase64 ? (
         <div className="flex flex-col items-center justify-center p-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">

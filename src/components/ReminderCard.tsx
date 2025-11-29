@@ -63,7 +63,7 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
       <div className={`p-3 sm:p-4 bg-white rounded-lg border transition-all hover:shadow-md ${!reminder.active ? 'opacity-60' : ''} ${isOverdue ? 'border-l-4 border-red-500' : 'border-gray-200'}`}>
         {/* Top row: Title and status */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-2 flex-1">{reminder.title}</h3>
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-2 flex-1 break-words overflow-hidden">{reminder.title}</h3>
           <div className="flex items-center gap-1 flex-shrink-0">
             <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full ${getRepeatBadgeColor(reminder.repeat)}`}>
               {reminder.repeat}
@@ -141,12 +141,12 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
     <div className={`card hover:shadow-lg transition-all duration-200 ${!reminder.active ? 'opacity-60' : ''} ${isOverdue ? 'border-l-4 border-red-500' : ''}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-lg font-semibold text-gray-900 mb-1 break-words overflow-hidden">
             {reminder.title}
           </h3>
           {reminder.why && (
-            <p className="text-sm text-gray-600 line-clamp-2">
+            <p className="text-sm text-gray-600 line-clamp-2 break-words">
               {reminder.why}
             </p>
           )}

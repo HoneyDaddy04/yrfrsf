@@ -127,13 +127,26 @@ function computeNextTriggerForSpecificTimes(times: string[], now: number): numbe
   const today = new Date();
   const triggers: number[] = [];
 
-  // Sort times chronologically
-  const sortedTimes = [...times].sort();
+  // Filter and sort valid times chronologically
+  const validTimes = times.filter(t => {
+    if (!t || typeof t !== 'string') return false;
+    const parts = t.split(':');
+    if (parts.length !== 2) return false;
+    const [h, m] = parts.map(Number);
+    return !isNaN(h) && !isNaN(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59;
+  });
+
+  // If no valid times, return 1 minute from now as fallback
+  if (validTimes.length === 0) {
+    console.warn('No valid times provided for specific times reminder');
+    return now + 60000;
+  }
+
+  const sortedTimes = [...validTimes].sort();
 
   // Check each time for today
   for (const timeStr of sortedTimes) {
     const [hours, minutes] = timeStr.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes)) continue;
 
     const triggerDate = new Date(today);
     triggerDate.setHours(hours, minutes, 0, 0);
@@ -145,7 +158,8 @@ function computeNextTriggerForSpecificTimes(times: string[], now: number): numbe
 
   // If no times left today, get first time tomorrow
   if (triggers.length === 0) {
-    const [hours, minutes] = sortedTimes[0].split(':').map(Number);
+    const firstTime = sortedTimes[0];
+    const [hours, minutes] = firstTime.split(':').map(Number);
     const tomorrowDate = new Date(today);
     tomorrowDate.setDate(tomorrowDate.getDate() + 1);
     tomorrowDate.setHours(hours, minutes, 0, 0);
@@ -545,17 +559,27 @@ export async function requestNotificationPermission(): Promise<boolean> {
  * @param reminder - The reminder to validate
  * @returns Object with isValid boolean and optional error message
  */
+/**
+ * Validates time format strictly (HH:MM with valid ranges)
+ */
+export function isValidTimeFormat(time: string): boolean {
+  if (!time || typeof time !== 'string') return false;
+  // Strict validation: must be HH:MM format with valid hour (00-23) and minute (00-59)
+  const match = time.match(/^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/);
+  return match !== null;
+}
+
 export function validateReminder(reminder: Partial<Reminder>): { isValid: boolean; error?: string } {
   if (!reminder.title || reminder.title.trim().length === 0) {
     return { isValid: false, error: "Title is required" };
   }
 
-  if (!reminder.time || !/^\d{1,2}:\d{2}$/.test(reminder.time)) {
-    return { isValid: false, error: "Invalid time format. Use HH:MM" };
+  if (!reminder.time || !isValidTimeFormat(reminder.time)) {
+    return { isValid: false, error: "Invalid time format. Use HH:MM (e.g., 09:30 or 14:00)" };
   }
 
   const [hours, minutes] = reminder.time.split(':').map(Number);
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
     return { isValid: false, error: "Time must be between 00:00 and 23:59" };
   }
 
@@ -563,8 +587,15 @@ export function validateReminder(reminder: Partial<Reminder>): { isValid: boolea
     return { isValid: false, error: "Invalid repeat type" };
   }
 
-  if (reminder.repeat === "custom" && (!reminder.customInterval || reminder.customInterval <= 0)) {
-    return { isValid: false, error: "Custom repeat requires a positive interval" };
+  // For custom repeat, validate based on the type
+  if (reminder.repeat === "custom") {
+    const hasCustomInterval = reminder.customInterval && reminder.customInterval > 0;
+    const hasSpecificTimes = reminder.specificTimes && reminder.specificTimes.length > 0;
+    const hasSpecificDays = reminder.daysOfWeek && reminder.daysOfWeek.length > 0;
+
+    if (!hasCustomInterval && !hasSpecificTimes && !hasSpecificDays) {
+      return { isValid: false, error: "Custom repeat requires an interval, specific times, or specific days" };
+    }
   }
 
   return { isValid: true };

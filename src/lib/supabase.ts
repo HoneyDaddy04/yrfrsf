@@ -18,6 +18,17 @@ export const supabase: SupabaseClient = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : createClient('https://placeholder.supabase.co', 'placeholder-key');
 
+// Helper to check if Supabase operation should proceed
+export const checkSupabaseConfigured = (operation: string): { ok: boolean; error?: string } => {
+  if (!isSupabaseConfigured) {
+    return {
+      ok: false,
+      error: `${operation} requires cloud sync. Please configure Supabase credentials in Settings.`
+    };
+  }
+  return { ok: true };
+};
+
 // Database types for TypeScript
 export interface DbReminder {
   id: string;

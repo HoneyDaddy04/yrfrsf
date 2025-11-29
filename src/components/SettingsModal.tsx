@@ -295,17 +295,23 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
 
                 {settings.autoRecallEnabled && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Max Recall Attempts (0 = unlimited)
+                    <label htmlFor="max-recall-attempts" className="block text-sm font-medium text-gray-700 mb-2">
+                      Max Recall Attempts
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={settings.maxRecallAttempts}
-                      onChange={(e) => setSettings({ ...settings, maxRecallAttempts: parseInt(e.target.value) || 0 })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="max-recall-attempts"
+                        type="number"
+                        min="0"
+                        max="10"
+                        value={settings.maxRecallAttempts}
+                        onChange={(e) => setSettings({ ...settings, maxRecallAttempts: parseInt(e.target.value) || 0 })}
+                        className="w-24 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                      <span className="text-sm text-gray-600">
+                        {settings.maxRecallAttempts === 0 ? '(Unlimited)' : `attempt${settings.maxRecallAttempts !== 1 ? 's' : ''}`}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -448,8 +454,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   <h3 className="font-semibold text-gray-900">Browser Voice Settings</h3>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Voice</label>
+                    <label htmlFor="browser-voice" className="block text-sm font-medium text-gray-700 mb-2">Voice</label>
                     <select
+                      id="browser-voice"
                       value={settings.browserVoice || ''}
                       onChange={(e) => setSettings({ ...settings, browserVoice: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -464,10 +471,11 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="browser-rate" className="block text-sm font-medium text-gray-700 mb-2">
                       Speed: {settings.browserRate.toFixed(1)}x
                     </label>
                     <input
+                      id="browser-rate"
                       type="range"
                       min="0.5"
                       max="2"
@@ -475,14 +483,18 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                       value={settings.browserRate}
                       onChange={(e) => setSettings({ ...settings, browserRate: parseFloat(e.target.value) })}
                       className="w-full"
+                      aria-valuemin={0.5}
+                      aria-valuemax={2}
+                      aria-valuenow={settings.browserRate}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="browser-pitch" className="block text-sm font-medium text-gray-700 mb-2">
                       Pitch: {settings.browserPitch.toFixed(1)}
                     </label>
                     <input
+                      id="browser-pitch"
                       type="range"
                       min="0.5"
                       max="2"
@@ -490,6 +502,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                       value={settings.browserPitch}
                       onChange={(e) => setSettings({ ...settings, browserPitch: parseFloat(e.target.value) })}
                       className="w-full"
+                      aria-valuemin={0.5}
+                      aria-valuemax={2}
+                      aria-valuenow={settings.browserPitch}
                     />
                   </div>
                 </div>
@@ -501,15 +516,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   <h3 className="font-semibold text-gray-900">OpenAI Voice Settings</h3>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="openai-api-key" className="block text-sm font-medium text-gray-700 mb-2">
                       API Key <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="openai-api-key"
                       type="password"
                       value={settings.apiKey}
                       onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
                       placeholder="sk-..."
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      autoComplete="off"
                     />
                     <p className="mt-2 text-xs text-gray-500">
                       Get your API key from{' '}
@@ -547,10 +564,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   onClick={handlePreviewVoice}
                   disabled={isPreviewingVoice || (settings.ttsProvider === 'openai' && !settings.apiKey)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-100 text-indigo-700 font-medium rounded-lg hover:bg-indigo-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={settings.ttsProvider === 'openai' && !settings.apiKey ? 'Enter your API key above to preview' : 'Preview voice'}
+                  aria-label={isPreviewingVoice ? 'Playing preview' : 'Preview voice'}
                 >
                   <Play className="w-5 h-5" />
                   {isPreviewingVoice ? 'Playing...' : 'Preview Voice'}
                 </button>
+                {settings.ttsProvider === 'openai' && !settings.apiKey && (
+                  <p className="text-xs text-gray-500 text-center mt-2">
+                    Enter your API key above to enable preview
+                  </p>
+                )}
               </div>
 
               {/* Panic Button Audio */}
@@ -643,12 +667,15 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 <div className="p-4 bg-gray-50 rounded-lg space-y-3">
                   <div>
                     <p className="text-sm text-gray-500">Email</p>
-                    <p className="font-medium text-gray-900">{user?.email || 'Not available'}</p>
+                    <p className="font-medium text-gray-900 break-all">{user?.email || 'Not available'}</p>
                   </div>
                   {user?.user_metadata?.full_name && (
                     <div>
                       <p className="text-sm text-gray-500">Name</p>
-                      <p className="font-medium text-gray-900">{user.user_metadata.full_name}</p>
+                      {/* Sanitize user metadata to prevent XSS */}
+                      <p className="font-medium text-gray-900 break-words">
+                        {String(user.user_metadata.full_name).slice(0, 100)}
+                      </p>
                     </div>
                   )}
                   <div>

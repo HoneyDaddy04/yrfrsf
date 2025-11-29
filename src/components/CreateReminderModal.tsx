@@ -61,6 +61,7 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
   const [groups, setGroups] = useState<ReminderGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<ReminderGroup | null>(null);
   const [loadingGroups, setLoadingGroups] = useState(false);
+  const [groupsError, setGroupsError] = useState<string | null>(null);
 
   // Fetch user's groups when "group" is selected
   useEffect(() => {
@@ -72,6 +73,13 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
   const fetchGroups = async () => {
     if (!user) return;
     setLoadingGroups(true);
+    setGroupsError(null);
+
+    // Timeout after 10 seconds
+    const timeoutId = setTimeout(() => {
+      setLoadingGroups(false);
+      setGroupsError('Loading groups timed out. Please try again.');
+    }, 10000);
 
     try {
       // Get groups where user is a member
@@ -79,6 +87,8 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
         .from('group_members')
         .select('group_id')
         .eq('user_id', user.id);
+
+      clearTimeout(timeoutId);
 
       if (memberError) throw memberError;
 
@@ -99,7 +109,9 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
 
       setGroups(groupsData || []);
     } catch (err) {
+      clearTimeout(timeoutId);
       console.error('Failed to fetch groups:', err);
+      setGroupsError('Failed to load groups. Please try again.');
     } finally {
       setLoadingGroups(false);
     }
@@ -158,10 +170,20 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
         }
       }
 
+      // Sanitize inputs
+      const sanitizedTitle = title.trim().slice(0, 200);
+      const sanitizedWhy = why.trim().slice(0, 500);
+
+      if (!sanitizedTitle) {
+        setError('Title cannot be empty');
+        setIsSubmitting(false);
+        return;
+      }
+
       const reminder = {
         id: uuidv4(),
-        title,
-        why,
+        title: sanitizedTitle,
+        why: sanitizedWhy,
         time: repeat === 'custom' && customRepeatType === 'specific_times' ? specificTimes[0] : time,
         repeat,
         nextTrigger: 0,
@@ -351,7 +373,18 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
               <label className="label">
                 Select group <span className="text-red-500">*</span>
               </label>
-              {loadingGroups ? (
+              {groupsError ? (
+                <div className="p-4 bg-red-50 rounded-lg border border-red-200 text-center">
+                  <p className="text-sm text-red-700 mb-2">{groupsError}</p>
+                  <button
+                    type="button"
+                    onClick={fetchGroups}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : loadingGroups ? (
                 <div className="flex items-center justify-center py-4">
                   <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                   <span className="ml-2 text-sm text-gray-500">Loading groups...</span>
@@ -391,10 +424,11 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
 
           {/* Title */}
           <div>
-            <label className="label">
+            <label htmlFor="reminder-title" className="label">
               Title <span className="text-red-500">*</span>
             </label>
             <input
+              id="reminder-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -402,18 +436,21 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
               className="input"
               required
               autoFocus
+              maxLength={200}
             />
           </div>
 
           {/* Why */}
           <div>
-            <label className="label">Why is this important?</label>
+            <label htmlFor="reminder-why" className="label">Why is this important?</label>
             <textarea
+              id="reminder-why"
               value={why}
               onChange={(e) => setWhy(e.target.value)}
               placeholder="e.g., Start my day with energy and focus"
               className="input min-h-[100px] resize-none"
               rows={3}
+              maxLength={500}
             />
           </div>
 
@@ -426,27 +463,30 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
 
           {/* Time */}
           <div>
-            <label className="label">
+            <label htmlFor="reminder-time" className="label">
               Time <span className="text-red-500">*</span>
             </label>
             <input
+              id="reminder-time"
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
               className="input"
               required
+              aria-describedby="time-hint"
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p id="time-hint" className="mt-1 text-xs text-gray-500">
               Select when you want to be reminded
             </p>
           </div>
 
           {/* Repeat */}
           <div>
-            <label className="label">
+            <label htmlFor="reminder-repeat" className="label">
               Repeat <span className="text-red-500">*</span>
             </label>
             <select
+              id="reminder-repeat"
               value={repeat}
               onChange={(e) => setRepeat(e.target.value as RepeatType)}
               className="input"
