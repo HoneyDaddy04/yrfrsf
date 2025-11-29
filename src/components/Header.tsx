@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Bell, Settings, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus, Phone, Users, UserCheck } from 'lucide-react';
+import { Bell, Settings, Clock, MapPin, Home, List, Menu, X, History, TrendingUp, Plus, Phone, Users, UserCheck, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 type TabType = 'home' | 'reminders' | 'insights' | 'partners' | 'groups';
 
@@ -13,6 +14,9 @@ interface HeaderProps {
   receivedCallsCount?: number;
   activeTab?: TabType;
   onTabChange?: (tab: TabType) => void;
+  isSyncing?: boolean;
+  onSyncClick?: () => void;
+  lastSyncAt?: number | null;
 }
 
 // Check if beta features are enabled
@@ -37,8 +41,12 @@ export default function Header({
   missedCallsCount = 0,
   receivedCallsCount = 0,
   activeTab = 'home',
-  onTabChange = () => {}
+  onTabChange = () => {},
+  isSyncing = false,
+  onSyncClick,
+  lastSyncAt,
 }: HeaderProps) {
+  const { user } = useAuth();
   const [now, setNow] = useState(new Date());
   const [locationLabel, setLocationLabel] = useState<string>('');
   const [locLoading, setLocLoading] = useState<boolean>(false);
@@ -219,6 +227,30 @@ export default function Header({
                 <span className="text-xs font-medium text-gray-700">{timeStr}</span>
               </div>
             </div>
+
+            {/* Sync button - only show if logged in */}
+            {user && onSyncClick && (
+              <button
+                onClick={onSyncClick}
+                disabled={isSyncing}
+                className={`relative p-1.5 rounded-full bg-white focus:outline-none transition-colors ${
+                  isSyncing
+                    ? 'text-indigo-500'
+                    : lastSyncAt
+                      ? 'text-green-500 hover:text-green-600'
+                      : 'text-gray-400 hover:text-gray-500'
+                }`}
+                title={
+                  isSyncing
+                    ? 'Syncing...'
+                    : lastSyncAt
+                      ? `Last synced: ${new Date(lastSyncAt).toLocaleTimeString()}`
+                      : 'Sync reminders'
+                }
+              >
+                <RefreshCw className={`h-5 w-5 ${isSyncing ? 'animate-spin' : ''}`} />
+              </button>
+            )}
 
             {/* Received Reminders button */}
             <button

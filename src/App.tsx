@@ -7,6 +7,7 @@ import { useCallManager } from './hooks/useCallManager';
 import { useRecallChecker } from './hooks/useRecallChecker';
 import { useIncomingCalls } from './hooks/useIncomingCalls';
 import { useSupabaseReminderScheduler } from './hooks/useSupabaseReminderScheduler';
+import { useReminderSync } from './hooks/useReminderSync';
 import { getAllReminders, updateReminder, initDB, addCompletionPrompt, updateCompletionPrompt } from './db/reminderDB';
 import { Reminder, computeNextTrigger } from './utils/reminderScheduler';
 import { showCallNotification, stopAllNotifications, requestNotificationPermission } from './utils/notificationUtils';
@@ -130,6 +131,9 @@ function App() {
 
   // Start the Supabase reminder scheduler (for reminders sent to others)
   useSupabaseReminderScheduler();
+
+  // Two-way sync with Supabase
+  const { syncStatus, manualSync, isSyncing } = useReminderSync(refreshTrigger);
 
   const handleReminderCreated = () => {
     setIsCreateModalOpen(false);
@@ -399,6 +403,9 @@ function App() {
         receivedCallsCount={pendingCalls.length}
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        isSyncing={isSyncing}
+        onSyncClick={manualSync}
+        lastSyncAt={syncStatus.lastSyncAt}
       />
 
       {/* Panic Button - Always visible for emergency support */}

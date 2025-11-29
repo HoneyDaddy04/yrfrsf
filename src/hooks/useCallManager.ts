@@ -21,6 +21,8 @@ export function useCallManager() {
 
   // Use ref to keep track of current call history for event handlers
   const callHistoryRef = useRef<CallHistoryEntry | null>(null);
+  // Track the actual start time of the call for accurate duration
+  const callStartTimeRef = useRef<number | null>(null);
 
   // Update ref whenever currentCallHistory changes
   useEffect(() => {
@@ -61,12 +63,16 @@ export function useCallManager() {
       // Auto-end call after AI finishes speaking - save duration immediately
       setTimeout(async () => {
         const callHistory = callHistoryRef.current;
+        const callStartTime = callStartTimeRef.current;
+
         if (callHistory) {
           const endedAt = Date.now();
-          const duration = callHistory.answeredAt
-            ? endedAt - callHistory.answeredAt
-            : 0;
+          // Use the ref-tracked start time for accurate duration calculation
+          const duration = callStartTime
+            ? endedAt - callStartTime
+            : (callHistory.answeredAt ? endedAt - callHistory.answeredAt : 0);
 
+          console.log('[CallManager] Call ended. Start time:', callStartTime, 'End time:', endedAt, 'Duration:', duration, 'ms');
 
           const updatedEntry = {
             ...callHistory,
@@ -76,6 +82,9 @@ export function useCallManager() {
           await updateCallHistory(updatedEntry);
           setCurrentCallHistory(null);
         }
+
+        // Reset the start time ref
+        callStartTimeRef.current = null;
 
         setCallState('ended');
         setTimeout(() => {
@@ -100,6 +109,11 @@ export function useCallManager() {
   const answerCall = async () => {
     setCallState('active');
 
+    // Record the exact time the call was answered for accurate duration tracking
+    const answeredAtTime = Date.now();
+    callStartTimeRef.current = answeredAtTime;
+    console.log('[CallManager] Call answered at:', answeredAtTime);
+
     // Cancel any pending recalls for this reminder (user answered!)
     if (currentReminder) {
       cancelRecall(currentReminder.id);
@@ -110,10 +124,12 @@ export function useCallManager() {
       const updatedEntry = {
         ...currentCallHistory,
         answered: true,
-        answeredAt: Date.now(),
+        answeredAt: answeredAtTime,
       };
       await updateCallHistory(updatedEntry);
       setCurrentCallHistory(updatedEntry);
+      // Also update the ref immediately for accurate duration tracking
+      callHistoryRef.current = updatedEntry;
     }
 
     // NOW play voice (custom recording or AI TTS)
@@ -283,9 +299,13 @@ export function useCallManager() {
     // Update call history: call ended with duration
     if (currentCallHistory) {
       const endedAt = Date.now();
-      const duration = currentCallHistory.answeredAt
-        ? endedAt - currentCallHistory.answeredAt
-        : 0;
+      const callStartTime = callStartTimeRef.current;
+      // Use the ref-tracked start time for accurate duration calculation
+      const duration = callStartTime
+        ? endedAt - callStartTime
+        : (currentCallHistory.answeredAt ? endedAt - currentCallHistory.answeredAt : 0);
+
+      console.log('[CallManager] Call hung up. Duration:', duration, 'ms');
 
       const updatedEntry = {
         ...currentCallHistory,
@@ -295,6 +315,9 @@ export function useCallManager() {
       await updateCallHistory(updatedEntry);
       setCurrentCallHistory(null);
     }
+
+    // Reset the start time ref
+    callStartTimeRef.current = null;
 
     setCallState('ended');
     setTimeout(() => {

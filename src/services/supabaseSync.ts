@@ -576,3 +576,214 @@ export async function getContactByNickname(userId: string, nickname: string): Pr
     return null;
   }
 }
+
+// ============================================================================
+// TWO-WAY SYNC OPERATIONS
+// ============================================================================
+
+export interface SyncResult {
+  success: boolean;
+  synced: number;
+  created: number;
+  updated: number;
+  errors: string[];
+}
+
+/**
+ * Sync reminders from Supabase to local IndexedDB.
+ * Merges cloud data with local data, preferring more recent updates.
+ */
+export async function syncRemindersFromCloud(
+  userId: string,
+  localReminders: Reminder[],
+  saveLocalReminder: (reminder: Reminder) => Promise<void>
+): Promise<SyncResult> {
+  const result: SyncResult = {
+    success: false,
+    synced: 0,
+    created: 0,
+    updated: 0,
+    errors: [],
+  };
+
+  if (!isSupabaseConfigured) {
+    result.errors.push('Supabase not configured');
+    return result;
+  }
+
+  try {
+    // Fetch all self-reminders for this user from Supabase
+    const { data: cloudReminders, error } = await supabase
+      .from('reminders')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_for_self', true);
+
+    if (error) {
+      result.errors.push(`Failed to fetch cloud reminders: ${error.message}`);
+      return result;
+    }
+
+    if (!cloudReminders || cloudReminders.length === 0) {
+      result.success = true;
+      return result;
+    }
+
+    // Create a map of local reminders by ID for quick lookup
+    const localRemindersMap = new Map(localReminders.map(r => [r.id, r]));
+
+    // Process each cloud reminder
+    for (const dbReminder of cloudReminders as DbReminder[]) {
+      try {
+        const localReminder = localRemindersMap.get(dbReminder.id);
+        const cloudUpdatedAt = new Date(dbReminder.updated_at).getTime();
+
+        if (!localReminder) {
+          // Reminder exists in cloud but not locally - create locally
+          const newReminder = fromDbReminder(dbReminder);
+          await saveLocalReminder(newReminder);
+          result.created++;
+          result.synced++;
+        } else {
+          // Reminder exists in both - check which is newer
+          // Use nextTrigger update time or createdAt as proxy for "last updated"
+          const localUpdatedEstimate = localReminder.nextTrigger || localReminder.createdAt;
+
+          // If cloud is newer, update local
+          if (cloudUpdatedAt > localUpdatedEstimate) {
+            const updatedReminder = fromDbReminder(dbReminder);
+            await saveLocalReminder(updatedReminder);
+            result.updated++;
+            result.synced++;
+          }
+        }
+      } catch (err) {
+        result.errors.push(`Failed to sync reminder ${dbReminder.id}: ${err}`);
+      }
+    }
+
+    result.success = true;
+  } catch (err) {
+    result.errors.push(`Sync failed: ${err}`);
+  }
+
+  return result;
+}
+
+/**
+ * Sync local reminders to Supabase.
+ * Uploads local reminders that don't exist in cloud or are newer.
+ */
+export async function syncRemindersToCloud(
+  userId: string,
+  localReminders: Reminder[]
+): Promise<SyncResult> {
+  const result: SyncResult = {
+    success: false,
+    synced: 0,
+    created: 0,
+    updated: 0,
+    errors: [],
+  };
+
+  if (!isSupabaseConfigured) {
+    result.errors.push('Supabase not configured');
+    return result;
+  }
+
+  try {
+    // Fetch existing cloud reminders to compare
+    const { data: existingCloud, error: fetchError } = await supabase
+      .from('reminders')
+      .select('id, updated_at')
+      .eq('user_id', userId)
+      .eq('is_for_self', true);
+
+    if (fetchError) {
+      result.errors.push(`Failed to fetch existing cloud reminders: ${fetchError.message}`);
+      return result;
+    }
+
+    const cloudRemindersMap = new Map(
+      (existingCloud || []).map(r => [r.id, new Date(r.updated_at).getTime()])
+    );
+
+    // Process each local reminder
+    for (const reminder of localReminders) {
+      try {
+        const cloudUpdatedAt = cloudRemindersMap.get(reminder.id);
+        const dbReminder = toDbReminder(reminder, userId);
+
+        if (cloudUpdatedAt === undefined) {
+          // Reminder doesn't exist in cloud - create it
+          const { error } = await supabase
+            .from('reminders')
+            .insert(dbReminder);
+
+          if (error) throw error;
+          result.created++;
+          result.synced++;
+        } else {
+          // Reminder exists - update if local is newer
+          const localUpdatedEstimate = reminder.nextTrigger || reminder.createdAt;
+
+          if (localUpdatedEstimate > cloudUpdatedAt) {
+            const { error } = await supabase
+              .from('reminders')
+              .update({
+                title: reminder.title,
+                why: reminder.why || null,
+                time: reminder.time,
+                next_trigger: reminder.nextTrigger,
+                repeat: reminder.repeat,
+                days_of_week: reminder.daysOfWeek || null,
+                custom_interval: reminder.customInterval || null,
+                specific_times: reminder.specificTimes || null,
+                active: reminder.active,
+                audio_recording: reminder.audioRecording || null,
+                use_custom_audio: reminder.useCustomAudio || false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', reminder.id);
+
+            if (error) throw error;
+            result.updated++;
+            result.synced++;
+          }
+        }
+      } catch (err) {
+        result.errors.push(`Failed to sync reminder ${reminder.id} to cloud: ${err}`);
+      }
+    }
+
+    result.success = true;
+  } catch (err) {
+    result.errors.push(`Sync to cloud failed: ${err}`);
+  }
+
+  return result;
+}
+
+/**
+ * Perform a full two-way sync.
+ * 1. Pull from cloud to local (cloud wins for conflicts)
+ * 2. Push local-only items to cloud
+ */
+export async function performFullSync(
+  userId: string,
+  localReminders: Reminder[],
+  saveLocalReminder: (reminder: Reminder) => Promise<void>
+): Promise<{ fromCloud: SyncResult; toCloud: SyncResult }> {
+  console.log('[Sync] Starting full two-way sync...');
+
+  // First, pull from cloud
+  const fromCloud = await syncRemindersFromCloud(userId, localReminders, saveLocalReminder);
+  console.log('[Sync] From cloud:', fromCloud);
+
+  // Then, push to cloud (after local has been updated)
+  // Re-fetch local reminders to include newly synced ones
+  const toCloud = await syncRemindersToCloud(userId, localReminders);
+  console.log('[Sync] To cloud:', toCloud);
+
+  return { fromCloud, toCloud };
+}

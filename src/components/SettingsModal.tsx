@@ -56,7 +56,9 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [playingRingtone, setPlayingRingtone] = useState<RingtoneType | null>(null);
+  const [currentAudioSource, setCurrentAudioSource] = useState<AudioBufferSourceNode | null>(null);
+  const [currentAudioContext, setCurrentAudioContext] = useState<AudioContext | null>(null);
   const [browserVoices, setBrowserVoices] = useState<BrowserVoice[]>([]);
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'voice' | 'data' | 'account'>('general');
@@ -113,12 +115,33 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   const handlePreviewRingtone = async (ringtoneType: RingtoneType) => {
-    if (isPlayingPreview) return;
-    setIsPlayingPreview(true);
+    // Stop any currently playing preview first
+    if (currentAudioSource) {
+      try {
+        currentAudioSource.stop();
+      } catch {
+        // Ignore if already stopped
+      }
+    }
+    if (currentAudioContext) {
+      try {
+        currentAudioContext.close();
+      } catch {
+        // Ignore if already closed
+      }
+    }
+
+    // If clicking the same ringtone that's playing, just stop it
+    if (playingRingtone === ringtoneType) {
+      setPlayingRingtone(null);
+      setCurrentAudioSource(null);
+      setCurrentAudioContext(null);
+      return;
+    }
+
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) {
-        setIsPlayingPreview(false);
         return;
       }
       const audioContext = new AudioContextClass();
@@ -126,15 +149,35 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(audioContext.destination);
-      source.onended = () => setIsPlayingPreview(false);
+
+      setPlayingRingtone(ringtoneType);
+      setCurrentAudioSource(source);
+      setCurrentAudioContext(audioContext);
+
+      source.onended = () => {
+        setPlayingRingtone(null);
+        setCurrentAudioSource(null);
+        setCurrentAudioContext(null);
+        audioContext.close().catch(() => {});
+      };
+
       source.start();
+
+      // Auto-stop after 2 seconds
       setTimeout(() => {
-        source.stop();
-        setIsPlayingPreview(false);
+        if (source) {
+          try {
+            source.stop();
+          } catch {
+            // Ignore if already stopped
+          }
+        }
       }, 2000);
     } catch (error) {
       console.error('Error playing ringtone preview:', error);
-      setIsPlayingPreview(false);
+      setPlayingRingtone(null);
+      setCurrentAudioSource(null);
+      setCurrentAudioContext(null);
     }
   };
 
@@ -390,10 +433,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); handlePreviewRingtone(ringtone.id); }}
-                        disabled={isPlayingPreview}
-                        className="px-3 py-1 text-xs font-medium text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50"
+                        className={`px-3 py-1 text-xs font-medium rounded-lg transition-colors ${
+                          playingRingtone === ringtone.id
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-indigo-600 hover:bg-indigo-100'
+                        }`}
                       >
-                        {isPlayingPreview ? 'Playing...' : 'Preview'}
+                        {playingRingtone === ringtone.id ? 'Stop' : 'Preview'}
                       </button>
                     </div>
                   ))}
