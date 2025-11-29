@@ -132,8 +132,11 @@ function App() {
   // Start the Supabase reminder scheduler (for reminders sent to others)
   useSupabaseReminderScheduler();
 
-  // Two-way sync with Supabase
-  const { syncStatus, manualSync, isSyncing } = useReminderSync(refreshTrigger);
+  // Two-way sync with Supabase - refresh UI when data synced from cloud
+  const handleSyncComplete = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+  const { syncStatus, manualSync, isSyncing } = useReminderSync(refreshTrigger, handleSyncComplete);
 
   const handleReminderCreated = () => {
     setIsCreateModalOpen(false);

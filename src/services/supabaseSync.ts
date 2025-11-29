@@ -772,17 +772,30 @@ export async function syncRemindersToCloud(
 export async function performFullSync(
   userId: string,
   localReminders: Reminder[],
-  saveLocalReminder: (reminder: Reminder) => Promise<void>
+  saveLocalReminder: (reminder: Reminder) => Promise<void>,
+  getUpdatedLocalReminders?: () => Promise<Reminder[]>
 ): Promise<{ fromCloud: SyncResult; toCloud: SyncResult }> {
   console.log('[Sync] Starting full two-way sync...');
+  console.log('[Sync] Initial local reminders count:', localReminders.length);
 
   // First, pull from cloud
   const fromCloud = await syncRemindersFromCloud(userId, localReminders, saveLocalReminder);
   console.log('[Sync] From cloud:', fromCloud);
 
-  // Then, push to cloud (after local has been updated)
-  // Re-fetch local reminders to include newly synced ones
-  const toCloud = await syncRemindersToCloud(userId, localReminders);
+  // If we have a way to get updated local reminders, use it
+  // This ensures we push the correct data after cloud sync
+  let remindersToSync = localReminders;
+  if (getUpdatedLocalReminders) {
+    try {
+      remindersToSync = await getUpdatedLocalReminders();
+      console.log('[Sync] Refreshed local reminders count:', remindersToSync.length);
+    } catch (err) {
+      console.warn('[Sync] Failed to refresh local reminders, using original list:', err);
+    }
+  }
+
+  // Then, push to cloud
+  const toCloud = await syncRemindersToCloud(userId, remindersToSync);
   console.log('[Sync] To cloud:', toCloud);
 
   return { fromCloud, toCloud };

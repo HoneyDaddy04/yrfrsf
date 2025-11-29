@@ -16,7 +16,8 @@
       "Bash(vercel --version:*)",
       "Bash(find:*)",
       "WebSearch",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []

@@ -20,7 +20,7 @@ export interface SyncStatus {
   error: string | null;
 }
 
-export function useReminderSync(refreshTrigger?: number) {
+export function useReminderSync(refreshTrigger?: number, onSyncComplete?: () => void) {
   const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     lastSyncAt: null,
@@ -31,6 +31,12 @@ export function useReminderSync(refreshTrigger?: number) {
   });
   const hasSyncedRef = useRef(false);
   const syncInProgressRef = useRef(false);
+  const onSyncCompleteRef = useRef(onSyncComplete);
+
+  // Keep the callback ref up to date
+  useEffect(() => {
+    onSyncCompleteRef.current = onSyncComplete;
+  }, [onSyncComplete]);
 
   // Save reminder to local DB (used by sync)
   const saveLocalReminder = useCallback(async (reminder: Reminder) => {
@@ -55,8 +61,8 @@ export function useReminderSync(refreshTrigger?: number) {
       // Get current local reminders
       const localReminders = await getAllReminders();
 
-      // Perform two-way sync
-      const result = await performFullSync(user.id, localReminders, saveLocalReminder);
+      // Perform two-way sync with ability to refresh local reminders after cloud sync
+      const result = await performFullSync(user.id, localReminders, saveLocalReminder, getAllReminders);
 
       setSyncStatus({
         lastSyncAt: Date.now(),
@@ -73,6 +79,11 @@ export function useReminderSync(refreshTrigger?: number) {
         fromCloud: `${result.fromCloud.synced} items (${result.fromCloud.created} created, ${result.fromCloud.updated} updated)`,
         toCloud: `${result.toCloud.synced} items (${result.toCloud.created} created, ${result.toCloud.updated} updated)`,
       });
+
+      // Notify callback if data was synced from cloud
+      if (result.fromCloud.synced > 0 && onSyncCompleteRef.current) {
+        onSyncCompleteRef.current();
+      }
     } catch (err) {
       console.error('[useReminderSync] Sync failed:', err);
       setSyncStatus(prev => ({
@@ -88,30 +99,33 @@ export function useReminderSync(refreshTrigger?: number) {
   // Auto-sync on mount and when user changes
   useEffect(() => {
     if (!user || !isSupabaseConfigured) {
+      // Reset sync state when user logs out
+      hasSyncedRef.current = false;
       return;
     }
 
-    // Only auto-sync once per session
-    if (hasSyncedRef.current) {
-      return;
-    }
-
-    // Check if we've synced recently (within last 5 minutes)
+    // Check if we've synced recently (within last 30 seconds for same session)
+    // But always sync on fresh login
     const lastSync = localStorage.getItem('yfs-last-sync');
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const lastSyncUserId = localStorage.getItem('yfs-last-sync-user');
+    const thirtySecondsAgo = Date.now() - 30 * 1000;
 
-    if (lastSync && parseInt(lastSync, 10) > fiveMinutesAgo) {
+    // If different user or first sync, always sync
+    const isNewUser = lastSyncUserId !== user.id;
+    const recentSync = lastSync && parseInt(lastSync, 10) > thirtySecondsAgo;
+
+    if (!isNewUser && recentSync && hasSyncedRef.current) {
       console.log('[useReminderSync] Skipping auto-sync - synced recently');
-      hasSyncedRef.current = true;
       return;
     }
 
     // Perform initial sync with a small delay to let the app initialize
     const timer = setTimeout(() => {
-      console.log('[useReminderSync] Starting auto-sync on app load');
+      console.log('[useReminderSync] Starting auto-sync on app load for user:', user.id);
       hasSyncedRef.current = true;
+      localStorage.setItem('yfs-last-sync-user', user.id);
       performSync();
-    }, 1000);
+    }, isNewUser ? 500 : 1000); // Faster sync for new user login
 
     return () => clearTimeout(timer);
   }, [user, performSync]);

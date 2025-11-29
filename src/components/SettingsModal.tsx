@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload, LogOut, User, Beaker, Sun, Moon, Monitor } from 'lucide-react';
+import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload, LogOut, User, Beaker, Sun, Moon, Monitor, Square, Sparkles } from 'lucide-react';
 import { AVAILABLE_RINGTONES, type RingtoneType, generateRingtone } from '../utils/ringtones';
 import { getBrowserVoices, OPENAI_VOICES, previewVoice, type TTSProvider, type BrowserVoice } from '../utils/textToSpeech';
 import { exportAllData, importData, type ExportData } from '../db/reminderDB';
@@ -7,6 +7,7 @@ import AudioRecorder from './AudioRecorder';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
+import { CURATED_SOUNDS, type Sound } from '../services/soundLibrary';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -59,6 +60,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const [playingRingtone, setPlayingRingtone] = useState<RingtoneType | null>(null);
   const [currentAudioSource, setCurrentAudioSource] = useState<AudioBufferSourceNode | null>(null);
   const [currentAudioContext, setCurrentAudioContext] = useState<AudioContext | null>(null);
+  const [playingCuratedSound, setPlayingCuratedSound] = useState<string | null>(null);
+  const [curatedAudioElement, setCuratedAudioElement] = useState<HTMLAudioElement | null>(null);
   const [browserVoices, setBrowserVoices] = useState<BrowserVoice[]>([]);
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'voice' | 'data' | 'account'>('general');
@@ -181,6 +184,86 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     }
   };
 
+  const handlePreviewCuratedSound = async (sound: Sound) => {
+    // Stop any currently playing curated sound
+    if (curatedAudioElement) {
+      curatedAudioElement.pause();
+      curatedAudioElement.currentTime = 0;
+    }
+
+    // If clicking the same sound that's playing, just stop it
+    if (playingCuratedSound === sound.id) {
+      setPlayingCuratedSound(null);
+      setCuratedAudioElement(null);
+      return;
+    }
+
+    try {
+      if (sound.source === 'builtin') {
+        // Use Web Audio API for built-in sounds
+        const { generateRingtone: genRingtone } = await import('../utils/ringtones');
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        const audioContext = new AudioContextClass();
+        const ringtoneMap: Record<string, RingtoneType> = {
+          'builtin-gentle': 'aurora',
+          'builtin-urgent': 'beacon',
+          'builtin-classic': 'reflection',
+          'builtin-marimba': 'prism',
+          'builtin-cosmic': 'cascade',
+        };
+        const ringtoneType = ringtoneMap[sound.id] || 'reflection';
+        const buffer = genRingtone(audioContext, ringtoneType);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+
+        setPlayingCuratedSound(sound.id);
+
+        source.onended = () => {
+          setPlayingCuratedSound(null);
+          audioContext.close().catch(() => {});
+        };
+
+        source.start();
+        setTimeout(() => {
+          try { source.stop(); } catch { /* ignore */ }
+        }, 2000);
+      } else {
+        // Play external sound via Audio element
+        const audio = new Audio(sound.previewUrl);
+        audio.volume = 0.7;
+
+        setPlayingCuratedSound(sound.id);
+        setCuratedAudioElement(audio);
+
+        audio.onended = () => {
+          setPlayingCuratedSound(null);
+          setCuratedAudioElement(null);
+        };
+        audio.onerror = () => {
+          setPlayingCuratedSound(null);
+          setCuratedAudioElement(null);
+        };
+
+        await audio.play();
+
+        // Auto-stop after 5 seconds
+        setTimeout(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          setPlayingCuratedSound(null);
+          setCuratedAudioElement(null);
+        }, 5000);
+      }
+    } catch (error) {
+      console.error('Error playing curated sound:', error);
+      setPlayingCuratedSound(null);
+      setCuratedAudioElement(null);
+    }
+  };
+
   const handlePreviewVoice = async () => {
     if (isPreviewingVoice) return;
     setIsPreviewingVoice(true);
@@ -235,41 +318,48 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            aria-label="Close settings"
-          >
-            <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-          </button>
+    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up flex flex-col border border-gray-100 dark:border-slate-700">
+        {/* Header with gradient */}
+        <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-white">Settings</h2>
+              <p className="text-indigo-100 text-sm mt-1">Customize your experience</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+              aria-label="Close settings"
+            >
+              <X className="w-6 h-6 text-white" />
+            </button>
+          </div>
         </div>
 
-        {/* Tabs - properly sized for all screens */}
-        <div className="flex border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-          {[
-            { id: 'general' as const, label: 'General', icon: Bell },
-            { id: 'voice' as const, label: 'Voice', icon: Mic },
-            { id: 'data' as const, label: 'Data', icon: Download },
-            ...(isSupabaseConfigured ? [{ id: 'account' as const, label: 'Account', icon: User }] : []),
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs sm:text-sm font-medium transition-colors border-b-2 ${
-                activeTab === tab.id
-                  ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30'
-                  : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-700'
-              }`}
-            >
-              <tab.icon className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate">{tab.label}</span>
-            </button>
-          ))}
+        {/* Tabs - modern pill design */}
+        <div className="px-4 py-3 bg-gray-50 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
+          <div className="flex gap-2 bg-gray-200/60 dark:bg-slate-800 p-1 rounded-xl">
+            {[
+              { id: 'general' as const, label: 'General', icon: Bell },
+              { id: 'voice' as const, label: 'Voice', icon: Mic },
+              { id: 'data' as const, label: 'Data', icon: Download },
+              ...(isSupabaseConfigured ? [{ id: 'account' as const, label: 'Account', icon: User }] : []),
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs sm:text-sm font-medium rounded-lg transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <tab.icon className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Content */}
@@ -444,6 +534,56 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Modern Sound Library */}
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                  <Sparkles className="w-5 h-5 text-pink-600" />
+                  <span>Sound Library</span>
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-pink-100 text-pink-700 rounded-full">Free</span>
+                </div>
+
+                <p className="text-sm text-gray-600">
+                  Modern, funky sounds from Freesound.org. Click to preview any sound.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto p-1">
+                  {CURATED_SOUNDS.map((sound) => (
+                    <div
+                      key={sound.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all ${
+                        playingCuratedSound === sound.id
+                          ? 'border-pink-500 bg-pink-50'
+                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 text-sm truncate">{sound.name}</p>
+                        <p className="text-xs text-gray-500 capitalize">{sound.category}</p>
+                      </div>
+                      <button
+                        onClick={() => handlePreviewCuratedSound(sound)}
+                        className={`ml-2 p-2 rounded-lg transition-colors flex-shrink-0 ${
+                          playingCuratedSound === sound.id
+                            ? 'bg-pink-600 text-white'
+                            : 'text-pink-600 hover:bg-pink-100'
+                        }`}
+                        title={playingCuratedSound === sound.id ? 'Stop' : 'Play'}
+                      >
+                        {playingCuratedSound === sound.id ? (
+                          <Square className="w-4 h-4" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-xs text-gray-400 text-center">
+                  All sounds are CC0 (public domain) from Freesound.org
+                </p>
               </div>
 
               {/* Beta Features */}
@@ -817,17 +957,17 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex gap-3 p-5 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+            className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 font-medium rounded-xl border border-gray-200 dark:border-slate-600 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all"
             disabled={isSaving}
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 transition-all disabled:opacity-50 active:scale-[0.98]"
             disabled={isSaving}
           >
             {isSaving ? (
