@@ -51,6 +51,9 @@ export default function GroupRemindersPage() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [createGroupStep, setCreateGroupStep] = useState<'details' | 'members'>('details');
+  const [pendingMembers, setPendingMembers] = useState<UserProfile[]>([]);
+  const [newlyCreatedGroupId, setNewlyCreatedGroupId] = useState<string | null>(null);
 
   // Add member form
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -171,16 +174,78 @@ export default function GroupRemindersPage() {
 
       if (memberError) throw memberError;
 
-      setShowCreateGroup(false);
-      setNewGroupName('');
-      setNewGroupDescription('');
+      // Store the new group ID and move to members step
+      setNewlyCreatedGroupId(groupData.id);
+      setCreateGroupStep('members');
       fetchGroups();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to create group:', err);
-      alert('Failed to create group. Please try again.');
+      const errorMessage = err instanceof Error ? err.message :
+        (typeof err === 'object' && err !== null && 'message' in err) ? String((err as {message: unknown}).message) :
+        'Unknown error';
+      alert(`Failed to create group: ${errorMessage}`);
     } finally {
       setCreatingGroup(false);
     }
+  };
+
+  const addPendingMember = (member: UserProfile) => {
+    if (!pendingMembers.find(m => m.id === member.id)) {
+      setPendingMembers([...pendingMembers, member]);
+    }
+    setSelectedUser(null);
+  };
+
+  const removePendingMember = (memberId: string) => {
+    setPendingMembers(pendingMembers.filter(m => m.id !== memberId));
+  };
+
+  const addMembersToGroup = async () => {
+    if (!newlyCreatedGroupId || pendingMembers.length === 0) return;
+
+    setAddingMember(true);
+    try {
+      for (const member of pendingMembers) {
+        const { error } = await supabase.from('group_members').insert({
+          group_id: newlyCreatedGroupId,
+          user_id: member.id,
+          email: member.email,
+          name: member.full_name || member.email?.split('@')[0],
+          role: 'member',
+        });
+        if (error) {
+          console.error(`Failed to add member ${member.email}:`, error);
+        }
+      }
+
+      // Close modal and reset state
+      finishGroupCreation();
+    } catch (err) {
+      console.error('Failed to add members:', err);
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  const finishGroupCreation = () => {
+    // Select the newly created group
+    if (newlyCreatedGroupId) {
+      const newGroup = groups.find(g => g.id === newlyCreatedGroupId);
+      if (newGroup) {
+        setSelectedGroup(newGroup);
+        fetchGroupDetails(newlyCreatedGroupId);
+      }
+    }
+
+    // Reset all state
+    setShowCreateGroup(false);
+    setNewGroupName('');
+    setNewGroupDescription('');
+    setCreateGroupStep('details');
+    setPendingMembers([]);
+    setNewlyCreatedGroupId(null);
+    setSelectedUser(null);
+    fetchGroups();
   };
 
   const addMember = async () => {
@@ -554,59 +619,179 @@ export default function GroupRemindersPage() {
         </div>
       </div>
 
-      {/* Create Group Modal */}
+      {/* Create Group Modal - Multi-step */}
       {showCreateGroup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Create Group</h2>
-              <button onClick={() => setShowCreateGroup(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {createGroupStep === 'details' ? 'Create Group' : 'Add Members'}
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Step {createGroupStep === 'details' ? '1' : '2'} of 2
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (createGroupStep === 'members') {
+                    finishGroupCreation();
+                  } else {
+                    setShowCreateGroup(false);
+                    setNewGroupName('');
+                    setNewGroupDescription('');
+                  }
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Group Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  placeholder="e.g., Family Fitness, Study Group"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description
-                </label>
-                <textarea
-                  value={newGroupDescription}
-                  onChange={(e) => setNewGroupDescription(e.target.value)}
-                  placeholder="What is this group for?"
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                />
+            {/* Step indicator */}
+            <div className="px-6 pt-4">
+              <div className="flex items-center gap-2">
+                <div className={`flex-1 h-1 rounded-full ${createGroupStep === 'details' ? 'bg-purple-600' : 'bg-purple-600'}`} />
+                <div className={`flex-1 h-1 rounded-full ${createGroupStep === 'members' ? 'bg-purple-600' : 'bg-gray-200'}`} />
               </div>
             </div>
 
+            {/* Content */}
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {createGroupStep === 'details' ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Group Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      placeholder="e.g., Family Fitness, Study Group"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      value={newGroupDescription}
+                      onChange={(e) => setNewGroupDescription(e.target.value)}
+                      placeholder="What is this group for?"
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-green-800">
+                      <strong>"{newGroupName}"</strong> created! Now add members to your group.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Search for members
+                    </label>
+                    <UserSearch
+                      onSelectUser={(user) => user && addPendingMember(user)}
+                      selectedUser={null}
+                      allowInvite={true}
+                    />
+                  </div>
+
+                  {/* Pending members list */}
+                  {pendingMembers.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Members to add ({pendingMembers.length})
+                      </label>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {pendingMembers.map((member) => (
+                          <div
+                            key={member.id}
+                            className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
+                                <span className="text-white text-sm font-medium">
+                                  {(member.full_name || member.email)?.[0]?.toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900 text-sm">
+                                  {member.full_name || member.email?.split('@')[0]}
+                                </p>
+                                <p className="text-xs text-gray-500">{member.email}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removePendingMember(member.id)}
+                              className="p-1 text-gray-400 hover:text-red-500"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {pendingMembers.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      Search above to add members, or skip to finish creating your group.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
             <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
-              <button
-                onClick={() => setShowCreateGroup(false)}
-                className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createGroup}
-                disabled={!newGroupName.trim() || creatingGroup}
-                className="flex-1 px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
-              >
-                {creatingGroup ? 'Creating...' : 'Create Group'}
-              </button>
+              {createGroupStep === 'details' ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowCreateGroup(false);
+                      setNewGroupName('');
+                      setNewGroupDescription('');
+                    }}
+                    className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={createGroup}
+                    disabled={!newGroupName.trim() || creatingGroup}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {creatingGroup ? 'Creating...' : 'Next: Add Members'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={finishGroupCreation}
+                    className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
+                  >
+                    {pendingMembers.length === 0 ? 'Skip for Now' : 'Skip'}
+                  </button>
+                  <button
+                    onClick={addMembersToGroup}
+                    disabled={pendingMembers.length === 0 || addingMember}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {addingMember ? 'Adding...' : `Add ${pendingMembers.length} Member${pendingMembers.length !== 1 ? 's' : ''}`}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
