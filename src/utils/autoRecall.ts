@@ -33,19 +33,19 @@ export function getRecallSettings(): RecallSettings {
       const settings = JSON.parse(settingsStr);
       return {
         enabled: settings.autoRecallEnabled ?? true,
-        maxAttempts: settings.maxRecallAttempts ?? 0, // 0 = unlimited
-        recallIntervals: settings.recallIntervals ?? [5, 10, 15, 30], // minutes
+        maxAttempts: settings.maxRecallAttempts ?? 3, // Default to 3 attempts (not unlimited)
+        recallIntervals: settings.recallIntervals ?? [1, 5, 15, 30], // minutes - first recall after 1 min
       };
     }
   } catch {
     // Use defaults on error
   }
 
-  // Defaults
+  // Defaults - sensible limits
   return {
     enabled: true,
-    maxAttempts: 0,
-    recallIntervals: [5, 10, 15, 30],
+    maxAttempts: 3, // Max 3 recall attempts by default
+    recallIntervals: [1, 5, 15, 30],
   };
 }
 
@@ -111,13 +111,17 @@ export function scheduleRecall(
 
   if (!settings.enabled) return;
 
-  // Check max attempts
-  if (settings.maxAttempts > 0 && attemptNumber >= settings.maxAttempts) return;
+  // Check max attempts (attemptNumber is the NEXT attempt we'd schedule)
+  if (settings.maxAttempts > 0 && attemptNumber > settings.maxAttempts) return;
 
   // Get interval for this attempt (cycle through intervals if needed)
   const intervalIndex = Math.min(attemptNumber - 1, settings.recallIntervals.length - 1);
   const intervalMinutes = settings.recallIntervals[intervalIndex];
-  const nextRecallTime = Date.now() + (intervalMinutes * 60 * 1000);
+
+  // Safety: minimum 30 seconds between recalls to prevent rapid fire
+  const minIntervalMs = 30 * 1000;
+  const intervalMs = Math.max(intervalMinutes * 60 * 1000, minIntervalMs);
+  const nextRecallTime = Date.now() + intervalMs;
 
   const recall: PendingRecall = {
     reminderId: reminder.id,
