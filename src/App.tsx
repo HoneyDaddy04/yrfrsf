@@ -8,8 +8,8 @@ import { useRecallChecker } from './hooks/useRecallChecker';
 import { useIncomingCalls } from './hooks/useIncomingCalls';
 import { useSupabaseReminderScheduler } from './hooks/useSupabaseReminderScheduler';
 import { useReminderSync } from './hooks/useReminderSync';
-import { getAllReminders, updateReminder, initDB, addCompletionPrompt, updateCompletionPrompt } from './db/reminderDB';
-import { Reminder, computeNextTrigger } from './utils/reminderScheduler';
+import { getAllReminders, updateReminder, initDB, addCompletionPrompt, updateCompletionPrompt, getAllCompletionPrompts } from './db/reminderDB';
+import { Reminder, computeNextTrigger, updateStreakOnCompletion } from './utils/reminderScheduler';
 import { showCallNotification, stopAllNotifications, requestNotificationPermission } from './utils/notificationUtils';
 import logger from './utils/logger';
 import ReminderList from './components/ReminderList';
@@ -219,7 +219,6 @@ function App() {
       logger.log('Check-in started for:', reminder.title);
 
       // Check if already checked in for this reminder today
-      const { getAllCompletionPrompts } = await import('./db/reminderDB');
       const allPrompts = await getAllCompletionPrompts();
 
       // Get today's start time (midnight)
@@ -259,17 +258,24 @@ function App() {
       });
       logger.log('Completion prompt updated');
 
+      // Update streak for the reminder
+      let updatedReminder = updateStreakOnCompletion(reminder);
+      logger.log('Streak updated:', updatedReminder.streak);
+
       // If reminder was paused, reactivate it and set next trigger
       if (!reminder.active && reminder.repeat !== 'once') {
         logger.log('Reactivating paused reminder...');
-        const updatedReminder = {
-          ...reminder,
+        updatedReminder = {
+          ...updatedReminder,
           active: true,
-          nextTrigger: computeNextTrigger({ ...reminder, active: true }),
+          nextTrigger: computeNextTrigger({ ...updatedReminder, active: true }),
         };
-        await updateReminder(updatedReminder);
         logger.log('Reminder reactivated');
       }
+
+      // Save the updated reminder with streak
+      await updateReminder(updatedReminder);
+      logger.log('Reminder updated with streak');
 
       setRefreshTrigger(prev => prev + 1); // Refresh insights and reminders
       logger.log('Check-in successful!');

@@ -448,17 +448,51 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
             <label htmlFor="reminder-time" className="label">
               Time <span className="text-red-500">*</span>
             </label>
-            <input
-              id="reminder-time"
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="input"
-              required
-              aria-describedby="time-hint"
-            />
+            <div className="flex gap-2">
+              <input
+                id="reminder-time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="input flex-1"
+                required
+                aria-describedby="time-hint"
+              />
+              <input
+                type="text"
+                value={time}
+                onChange={(e) => {
+                  // Allow manual time input in HH:MM format
+                  const value = e.target.value;
+                  // Auto-format as user types
+                  if (/^\d{0,2}:?\d{0,2}$/.test(value)) {
+                    if (value.length === 2 && !value.includes(':')) {
+                      setTime(value + ':');
+                    } else {
+                      setTime(value);
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  // Validate and format on blur
+                  const value = e.target.value;
+                  const match = value.match(/^(\d{1,2}):?(\d{2})?$/);
+                  if (match) {
+                    const hours = parseInt(match[1], 10);
+                    const minutes = parseInt(match[2] || '0', 10);
+                    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+                      setTime(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`);
+                    }
+                  }
+                }}
+                placeholder="21:00"
+                className="input w-24 text-center"
+                maxLength={5}
+                aria-label="Type time manually"
+              />
+            </div>
             <p id="time-hint" className="mt-1 text-xs text-gray-500">
-              Select when you want to be reminded
+              Use the picker or type time directly (e.g., 21:00)
             </p>
           </div>
 
