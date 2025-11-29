@@ -37,8 +37,8 @@ export function getRecallSettings(): RecallSettings {
         recallIntervals: settings.recallIntervals ?? [5, 10, 15, 30], // minutes
       };
     }
-  } catch (error) {
-    console.error('Error loading recall settings:', error);
+  } catch {
+    // Use defaults on error
   }
 
   // Defaults
@@ -68,8 +68,8 @@ export function saveRecallSettings(settings: Partial<RecallSettings>): void {
     }
 
     localStorage.setItem('aiReminderSettings', JSON.stringify(currentSettings));
-  } catch (error) {
-    console.error('Error saving recall settings:', error);
+  } catch {
+    // Ignore save errors
   }
 }
 
@@ -82,8 +82,8 @@ export function getPendingRecalls(): PendingRecall[] {
     if (recallsStr) {
       return JSON.parse(recallsStr);
     }
-  } catch (error) {
-    console.error('Error loading pending recalls:', error);
+  } catch {
+    // Return empty on error
   }
   return [];
 }
@@ -94,8 +94,8 @@ export function getPendingRecalls(): PendingRecall[] {
 function savePendingRecalls(recalls: PendingRecall[]): void {
   try {
     localStorage.setItem(PENDING_RECALLS_KEY, JSON.stringify(recalls));
-  } catch (error) {
-    console.error('Error saving pending recalls:', error);
+  } catch {
+    // Ignore save errors
   }
 }
 
@@ -109,16 +109,10 @@ export function scheduleRecall(
 ): void {
   const settings = getRecallSettings();
 
-  if (!settings.enabled) {
-    console.log('⏭️ Auto-recall is disabled');
-    return;
-  }
+  if (!settings.enabled) return;
 
   // Check max attempts
-  if (settings.maxAttempts > 0 && attemptNumber >= settings.maxAttempts) {
-    console.log(`⏹️ Max recall attempts (${settings.maxAttempts}) reached for ${reminder.title}`);
-    return;
-  }
+  if (settings.maxAttempts > 0 && attemptNumber >= settings.maxAttempts) return;
 
   // Get interval for this attempt (cycle through intervals if needed)
   const intervalIndex = Math.min(attemptNumber - 1, settings.recallIntervals.length - 1);
@@ -141,8 +135,6 @@ export function scheduleRecall(
   // Add new recall
   filtered.push(recall);
   savePendingRecalls(filtered);
-
-  console.log(`📞 Recall scheduled for ${reminder.title} - Attempt #${attemptNumber} in ${intervalMinutes} minutes`);
 }
 
 /**
@@ -152,7 +144,6 @@ export function cancelRecall(reminderId: string): void {
   const recalls = getPendingRecalls();
   const filtered = recalls.filter(r => r.reminderId !== reminderId);
   savePendingRecalls(filtered);
-  console.log(`❌ Recall cancelled for reminder ${reminderId}`);
 }
 
 /**
@@ -178,5 +169,4 @@ export function removeRecall(reminderId: string): void {
  */
 export function clearAllRecalls(): void {
   savePendingRecalls([]);
-  console.log('🗑️ All pending recalls cleared');
 }

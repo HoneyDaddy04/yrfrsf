@@ -34,23 +34,11 @@ export function useSupabaseReminderScheduler() {
           .eq('is_for_self', false)
           .lte('next_trigger', now);
 
-        if (error) {
-          console.error('Error fetching Supabase reminders:', error);
-          return;
-        }
-
-        if (!reminders || reminders.length === 0) return;
-
-        console.log(`📞 Found ${reminders.length} reminder(s) to send to others`);
+        if (error || !reminders || reminders.length === 0) return;
 
         for (const dbReminder of reminders as DbReminder[]) {
           // Only process reminders for other users
-          if (!dbReminder.recipient_id) {
-            console.warn('Skipping reminder without recipient_id:', dbReminder.id);
-            continue;
-          }
-
-          console.log(`📨 Sending reminder "${dbReminder.title}" to recipient ${dbReminder.recipient_id}`);
+          if (!dbReminder.recipient_id) continue;
 
           // Create pending call for recipient
           const senderName = dbReminder.sender_name
@@ -79,10 +67,7 @@ export function useSupabaseReminderScheduler() {
             user?.email || ''
           );
 
-          if (callError) {
-            console.error('Failed to create pending call:', callError);
-            continue;
-          }
+          if (callError) continue;
 
           // Calculate next occurrence
           const reminder = {
@@ -107,18 +92,16 @@ export function useSupabaseReminderScheduler() {
               .from('reminders')
               .update({ active: false })
               .eq('id', dbReminder.id);
-            console.log(`   ℹ️ One-time reminder deactivated: ${dbReminder.title}`);
           } else {
             // Recurring reminder - update next trigger time
             await supabase
               .from('reminders')
               .update({ next_trigger: nextTrigger })
               .eq('id', dbReminder.id);
-            console.log(`   ℹ️ Next occurrence scheduled for: ${new Date(nextTrigger).toLocaleString()}`);
           }
         }
-      } catch (error) {
-        console.error('Error in Supabase reminder scheduler:', error);
+      } catch {
+        // Silent fail for scheduler checks
       }
     };
 

@@ -408,7 +408,6 @@ export function subscribeToPendingCalls(
         filter: `recipient_id=eq.${userId}`,
       },
       (payload) => {
-        console.log('📞 New pending call received:', payload.new);
         onNewCall(payload.new as PendingCall);
       }
     )

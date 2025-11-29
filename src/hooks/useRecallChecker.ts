@@ -12,8 +12,6 @@ export function useRecallChecker() {
       const dueRecalls = getDueRecalls();
 
       dueRecalls.forEach(recall => {
-        console.log(`📞 Triggering recall attempt #${recall.attemptNumber} for ${recall.reminder.title}`);
-
         // Dispatch reminder event with recall attempt number
         const event = new CustomEvent('reminderTriggered', {
           detail: {

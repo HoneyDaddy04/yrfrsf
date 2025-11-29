@@ -108,9 +108,8 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
       if (groupsError) throw groupsError;
 
       setGroups(groupsData || []);
-    } catch (err) {
+    } catch {
       clearTimeout(timeoutId);
-      console.error('Failed to fetch groups:', err);
       setGroupsError('Failed to load groups. Please try again.');
     } finally {
       setLoadingGroups(false);
@@ -213,7 +212,6 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
       if (isForSelf) {
         // Save locally for self reminders
         await addReminder(reminder);
-        console.log('✅ Reminder created (self):', reminder.title);
       }
 
       if (isForGroup && selectedGroup && user && isSupabaseConfigured) {
@@ -230,44 +228,28 @@ export default function CreateReminderModal({ onClose, onReminderCreated }: Crea
         });
 
         if (groupError) {
-          console.error('Failed to create group reminder:', groupError);
           setError('Failed to create group reminder. Please try again.');
           setIsSubmitting(false);
           return;
         }
-
-        console.log('✅ Group reminder created for:', selectedGroup.name);
       } else if (!isForGroup) {
         // Sync to Supabase (for both self and others)
         if (user) {
           const senderName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Someone';
-          const { error: syncError } = await saveReminderToSupabase(
+          await saveReminderToSupabase(
             reminder,
             user.id,
             isForSelf ? undefined : selectedRecipient?.id,
             isForSelf ? undefined : selectedRecipient?.email || undefined,
             isForSelf ? undefined : senderName
-          );
-
-          if (syncError) {
-            console.warn('Failed to sync to Supabase:', syncError);
-            // Don't fail the whole operation, just warn
-          } else {
-            console.log('☁️ Reminder synced to Supabase');
-          }
+          ).catch(() => {
+            // Ignore sync errors - don't fail the whole operation
+          });
         }
       }
 
-      console.log('📅 Next trigger:', new Date(reminder.nextTrigger).toLocaleString());
-      if (isForGroup) {
-        console.log('📨 Reminder will be sent to group:', selectedGroup?.name);
-      } else if (!isForSelf) {
-        console.log('📨 Reminder will be sent to:', selectedRecipient?.email);
-      }
-
       onReminderCreated();
-    } catch (err) {
-      console.error('Failed to create reminder:', err);
+    } catch {
       setError('Failed to create reminder. Please try again.');
       setIsSubmitting(false);
     }

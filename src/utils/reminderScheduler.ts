@@ -11,6 +11,13 @@
 
 export type RepeatType = "once" | "hourly" | "daily" | "weekly" | "custom";
 
+export interface StreakData {
+  count: number; // Current consecutive days completed
+  lastCompletedDate?: string; // YYYY-MM-DD format
+  longestStreak: number; // Personal best streak
+  totalCompletions: number; // Total number of times completed
+}
+
 export interface Reminder {
   id: string;
   title: string;
@@ -26,6 +33,12 @@ export interface Reminder {
   specificTimes?: string[]; // Optional: multiple times for "specific times" repeat (e.g., ["09:00", "14:00", "18:00"])
   audioRecording?: string; // Optional: base64-encoded audio blob for self-recorded messages
   useCustomAudio?: boolean; // Whether to use custom audio instead of AI TTS
+  // Snooze support
+  snoozedUntil?: number; // UTC timestamp when snooze expires
+  snoozeCount?: number; // Number of times snoozed for this occurrence
+  originalNextTrigger?: number; // Store original trigger time before snooze
+  // Streak tracking
+  streak?: StreakData;
 }
 
 // ============================================================================
@@ -289,11 +302,6 @@ export function computeNextRecurrence(reminder: Reminder): number | null {
  * @param reminder - The reminder to trigger
  */
 export async function triggerReminder(reminder: Reminder): Promise<void> {
-  console.log("🔔 Reminder Triggered:", reminder.title);
-  console.log("   Why:", reminder.why);
-  console.log("   Time:", reminder.time);
-  console.log("   Repeat:", reminder.repeat);
-
   // Dispatch custom event - this will show the incoming call UI
   // Voice will only play AFTER user answers
   window.dispatchEvent(
@@ -306,8 +314,6 @@ export async function triggerReminder(reminder: Reminder): Promise<void> {
  * This is called ONLY when user answers the call
  */
 export async function initiateAIVoiceCall(reminder: Reminder, settings: any): Promise<void> {
-  console.log("📞 Initiating AI voice call with Nigerian accent...");
-
   // OPTIMIZED: Simpler prompt for faster response
   const prompt = `Reminder: ${reminder.title}. ${reminder.why || 'Time to act!'}`;
 
@@ -342,7 +348,6 @@ export async function initiateAIVoiceCall(reminder: Reminder, settings: any): Pr
 
     const chatData = await chatResponse.json();
     const aiMessage = chatData.choices[0]?.message?.content || '';
-    console.log("🤖 AI Message:", aiMessage);
 
     // Step 2: Convert text to speech using OpenAI TTS
     const ttsResponse = await fetch('https://api.openai.com/v1/audio/speech', {
@@ -367,22 +372,30 @@ export async function initiateAIVoiceCall(reminder: Reminder, settings: any): Pr
     const audioBlob = await ttsResponse.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl);
-    
-    console.log("🔊 Playing AI voice...");
-    
+
     // Dispatch event when speaking starts
     window.dispatchEvent(new CustomEvent('aiSpeakingStart'));
-    
+
     audio.onended = () => {
-      console.log("✅ AI voice finished");
       window.dispatchEvent(new CustomEvent('aiSpeakingEnd'));
       URL.revokeObjectURL(audioUrl);
     };
-    
-    await audio.play();
+
+    audio.onerror = () => {
+      window.dispatchEvent(new CustomEvent('aiSpeakingEnd'));
+      URL.revokeObjectURL(audioUrl);
+    };
+
+    try {
+      await audio.play();
+    } catch (playError) {
+      // Handle autoplay restriction or other audio errors
+      window.dispatchEvent(new CustomEvent('aiSpeakingEnd'));
+      URL.revokeObjectURL(audioUrl);
+      console.warn('Audio playback failed:', playError);
+    }
 
   } catch (error) {
-    console.error("❌ AI voice call error:", error);
     throw error;
   }
 }
@@ -412,8 +425,6 @@ export function startReminderScheduler(
     clearInterval(schedulerInterval);
   }
 
-  console.log("✅ Reminder scheduler started (checking every", checkInterval / 1000, "seconds)");
-
   // Check immediately on start
   checkReminders();
 
@@ -433,8 +444,6 @@ export function startReminderScheduler(
 
         // Check if reminder is due
         if (now >= reminder.nextTrigger) {
-          console.log(`⏰ Reminder due: ${reminder.title} (scheduled for ${new Date(reminder.nextTrigger).toLocaleString()})`);
-          
           // Trigger the reminder
           triggerReminder(reminder);
 
@@ -447,19 +456,18 @@ export function startReminderScheduler(
               ...reminder,
               active: false,
             });
-            console.log(`   ℹ️ One-time reminder deactivated: ${reminder.title}`);
           } else {
             // Recurring reminder - update next trigger time
             await updateReminder({
               ...reminder,
               nextTrigger,
             });
-            console.log(`   ℹ️ Next occurrence scheduled for: ${new Date(nextTrigger).toLocaleString()}`);
           }
         }
       }
     } catch (error) {
-      console.error("Error checking reminders:", error);
+      // Log error but don't throw - scheduler must keep running
+      console.error('[Scheduler] Error checking reminders:', error);
     }
   }
 
@@ -468,7 +476,6 @@ export function startReminderScheduler(
     if (schedulerInterval) {
       clearInterval(schedulerInterval);
       schedulerInterval = null;
-      console.log("🛑 Reminder scheduler stopped");
     }
   };
 }
@@ -599,4 +606,151 @@ export function validateReminder(reminder: Partial<Reminder>): { isValid: boolea
   }
 
   return { isValid: true };
+}
+
+// ============================================================================
+// SNOOZE FUNCTIONS
+// ============================================================================
+
+/**
+ * Snooze a reminder for a specified number of minutes.
+ * Returns the updated reminder object.
+ */
+export function snoozeReminder(reminder: Reminder, minutes: number): Reminder {
+  const now = Date.now();
+  const snoozeUntil = now + (minutes * 60 * 1000);
+
+  return {
+    ...reminder,
+    // Store original trigger time if not already snoozed
+    originalNextTrigger: reminder.originalNextTrigger || reminder.nextTrigger,
+    nextTrigger: snoozeUntil,
+    snoozedUntil: snoozeUntil,
+    snoozeCount: (reminder.snoozeCount || 0) + 1,
+  };
+}
+
+/**
+ * Clear snooze state from a reminder (called after reminder triggers or is completed).
+ */
+export function clearSnooze(reminder: Reminder): Reminder {
+  const { snoozedUntil, snoozeCount, originalNextTrigger, ...rest } = reminder;
+  return rest as Reminder;
+}
+
+// ============================================================================
+// STREAK FUNCTIONS
+// ============================================================================
+
+/**
+ * Get today's date in YYYY-MM-DD format.
+ */
+function getTodayDateString(): string {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+}
+
+/**
+ * Get yesterday's date in YYYY-MM-DD format.
+ */
+function getYesterdayDateString(): string {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return yesterday.toISOString().split('T')[0];
+}
+
+/**
+ * Update streak when a reminder is completed.
+ * Returns the updated reminder with new streak data.
+ */
+export function updateStreakOnCompletion(reminder: Reminder): Reminder {
+  const today = getTodayDateString();
+  const yesterday = getYesterdayDateString();
+
+  const currentStreak = reminder.streak || {
+    count: 0,
+    longestStreak: 0,
+    totalCompletions: 0,
+  };
+
+  // If already completed today, don't update streak count
+  if (currentStreak.lastCompletedDate === today) {
+    return reminder;
+  }
+
+  let newCount = 1;
+
+  // If completed yesterday, continue the streak
+  if (currentStreak.lastCompletedDate === yesterday) {
+    newCount = currentStreak.count + 1;
+  }
+  // If completed earlier (not yesterday), reset streak
+  // This is already handled by newCount = 1
+
+  const newLongest = Math.max(newCount, currentStreak.longestStreak);
+
+  return {
+    ...reminder,
+    streak: {
+      count: newCount,
+      lastCompletedDate: today,
+      longestStreak: newLongest,
+      totalCompletions: currentStreak.totalCompletions + 1,
+    },
+  };
+}
+
+/**
+ * Check if streak should be broken (called when checking reminders).
+ * Returns the updated reminder if streak was broken.
+ */
+export function checkStreakStatus(reminder: Reminder): Reminder {
+  if (!reminder.streak || !reminder.streak.lastCompletedDate) {
+    return reminder;
+  }
+
+  const yesterday = getYesterdayDateString();
+  const today = getTodayDateString();
+
+  // If last completed date is before yesterday, streak is broken
+  if (
+    reminder.streak.lastCompletedDate !== yesterday &&
+    reminder.streak.lastCompletedDate !== today
+  ) {
+    return {
+      ...reminder,
+      streak: {
+        ...reminder.streak,
+        count: 0, // Reset current streak
+        // Keep longestStreak and totalCompletions
+      },
+    };
+  }
+
+  return reminder;
+}
+
+/**
+ * Get streak emoji based on streak count.
+ */
+export function getStreakEmoji(count: number): string {
+  if (count === 0) return '';
+  if (count < 3) return '🔥';
+  if (count < 7) return '🔥🔥';
+  if (count < 14) return '🔥🔥🔥';
+  if (count < 30) return '💪🔥';
+  if (count < 100) return '⭐🔥';
+  return '🏆🔥';
+}
+
+/**
+ * Get streak color class based on streak count.
+ */
+export function getStreakColor(count: number): string {
+  if (count === 0) return 'text-gray-400';
+  if (count < 3) return 'text-orange-400';
+  if (count < 7) return 'text-orange-500';
+  if (count < 14) return 'text-amber-500';
+  if (count < 30) return 'text-yellow-500';
+  return 'text-yellow-400';
 }

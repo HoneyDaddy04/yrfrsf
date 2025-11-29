@@ -10,6 +10,7 @@ import { useSupabaseReminderScheduler } from './hooks/useSupabaseReminderSchedul
 import { getAllReminders, updateReminder, initDB, addCompletionPrompt, updateCompletionPrompt } from './db/reminderDB';
 import { Reminder, computeNextTrigger } from './utils/reminderScheduler';
 import { showCallNotification, stopAllNotifications, requestNotificationPermission } from './utils/notificationUtils';
+import logger from './utils/logger';
 import ReminderList from './components/ReminderList';
 import CreateReminderModal from './components/CreateReminderModal';
 import EditReminderModal from './components/EditReminderModal';
@@ -86,10 +87,10 @@ function App() {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
           .then(registration => {
-            console.log('✅ ServiceWorker registration successful with scope: ', registration.scope);
+            logger.log('ServiceWorker registration successful with scope:', registration.scope);
           })
           .catch(err => {
-            console.error('❌ ServiceWorker registration failed: ', err);
+            logger.error('ServiceWorker registration failed:', err);
           });
       });
     }
@@ -100,16 +101,16 @@ function App() {
     const initApp = async () => {
       try {
         await initDB();
-        console.log('✅ Database initialized');
+        logger.log('Database initialized');
 
         const permission = await requestNotificationPermission();
         if (permission === 'granted') {
-          console.log('✅ Notification permission granted');
+          logger.log('Notification permission granted');
         } else {
-          console.log('⚠️ Notification permission denied');
+          logger.warn('Notification permission denied');
         }
       } catch (err) {
-        console.error('❌ Initialization error:', err);
+        logger.error('Initialization error:', err);
       }
     };
 
@@ -211,7 +212,7 @@ function App() {
   // Manual check-in handler
   const handleCheckIn = async (reminder: Reminder) => {
     try {
-      console.log('Check-in started for:', reminder.title);
+      logger.log('Check-in started for:', reminder.title);
 
       // Check if already checked in for this reminder today
       const { getAllCompletionPrompts } = await import('./db/reminderDB');
@@ -230,8 +231,8 @@ function App() {
       );
 
       if (existingCheckIn) {
-        alert('⚠️ Already Checked In!\n\nYou have already checked in for this reminder today.');
-        console.log('❌ Already checked in today');
+        alert('Already Checked In!\n\nYou have already checked in for this reminder today.');
+        logger.log('Already checked in today');
         return;
       }
 
@@ -246,42 +247,41 @@ function App() {
         promptedAt: Date.now(),
         completed: true, // Manually marked as complete
       });
-      console.log('Completion prompt added');
+      logger.log('Completion prompt added');
 
       await updateCompletionPrompt(promptId, {
         respondedAt: Date.now(),
         completed: true,
       });
-      console.log('Completion prompt updated');
+      logger.log('Completion prompt updated');
 
       // If reminder was paused, reactivate it and set next trigger
       if (!reminder.active && reminder.repeat !== 'once') {
-        console.log('Reactivating paused reminder...');
+        logger.log('Reactivating paused reminder...');
         const updatedReminder = {
           ...reminder,
           active: true,
           nextTrigger: computeNextTrigger({ ...reminder, active: true }),
         };
         await updateReminder(updatedReminder);
-        console.log('Reminder reactivated');
+        logger.log('Reminder reactivated');
       }
 
       setRefreshTrigger(prev => prev + 1); // Refresh insights and reminders
-      console.log('✅ Check-in successful!');
+      logger.log('Check-in successful!');
 
       // Show success notification
       if (Notification.permission === "granted") {
-        new Notification("Checked In! 🎉", {
+        new Notification("Checked In!", {
           body: `${reminder.title} marked as completed${!reminder.active ? ' and reactivated' : ''}`,
           icon: "/favicon.ico",
         });
       } else {
         // Show alert if notifications not granted
-        alert(`✅ Checked In! ${reminder.title} marked as completed${!reminder.active ? ' and reactivated' : ''}`);
+        alert(`Checked In! ${reminder.title} marked as completed${!reminder.active ? ' and reactivated' : ''}`);
       }
     } catch (error) {
-      console.error('❌ Check-in failed:', error);
-      console.error('Error details:', error instanceof Error ? error.message : String(error));
+      logger.error('Check-in failed:', error);
       alert(`Failed to check in: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     }
   };

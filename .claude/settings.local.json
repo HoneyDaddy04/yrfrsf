@@ -14,7 +14,9 @@
       "Bash(npm run dev:*)",
       "Bash(PGPASSWORD=postgres psql:*)",
       "Bash(vercel --version:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebSearch",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

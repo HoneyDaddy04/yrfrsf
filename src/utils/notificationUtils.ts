@@ -30,15 +30,17 @@ export const cleanupAudioContext = (): void => {
 // Initialize audio context
 const initAudio = async (): Promise<AudioContext> => {
   if (!audioContext || audioContext.state === 'closed') {
-    // @ts-ignore - webkitAudioContext for Safari
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+      throw new Error('AudioContext not supported');
+    }
     audioContext = new AudioContextClass();
 
     // Preload ringtone
     try {
       await loadRingtone();
-    } catch (error) {
-      console.error('Failed to load ringtone:', error);
+    } catch {
+      // Ignore ringtone load errors
     }
   }
   return audioContext;

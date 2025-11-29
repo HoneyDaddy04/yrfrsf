@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Clock, Repeat, Trash2, Edit, Play, Pause, Calendar, CheckCircle } from 'lucide-react';
-import { Reminder, computeNextTrigger } from '../utils/reminderScheduler';
+import { Clock, Repeat, Trash2, Edit, Play, Pause, Calendar, CheckCircle, AlertTriangle, Flame } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Reminder, computeNextTrigger, getStreakColor } from '../utils/reminderScheduler';
 import { updateReminder, deleteReminder } from '../db/reminderDB';
 import { useReminderCountdown } from '../hooks/useReminderCountdown';
 
@@ -12,37 +13,84 @@ interface ReminderCardProps {
   viewMode?: 'grid' | 'list';
 }
 
+// Delete Confirmation Modal Component
+function DeleteConfirmModal({
+  title,
+  onConfirm,
+  onCancel
+}: {
+  title: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-slide-up">
+        <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+          <AlertTriangle className="w-6 h-6 text-red-600" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">Delete Reminder</h3>
+        <p className="text-gray-600 text-center mb-6">
+          Are you sure you want to delete "{title}"? This action cannot be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, viewMode = 'grid' }: ReminderCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const countdown = useReminderCountdown(reminder);
 
   const handleToggleActive = async () => {
     try {
       const updated = { ...reminder, active: !reminder.active };
-      
+
       // Recalculate next trigger if reactivating
       if (updated.active) {
         updated.nextTrigger = computeNextTrigger(updated);
       }
-      
+
       await updateReminder(updated);
       onUpdate();
     } catch (error) {
-      console.error('Failed to toggle reminder:', error);
+      console.error('Failed to toggle reminder active state:', error);
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete "${reminder.title}"?`)) return;
-    
+  const handleDeleteClick = () => {
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
     try {
       setIsDeleting(true);
+      setShowDeleteModal(false);
       await deleteReminder(reminder.id);
       onUpdate();
     } catch (error) {
       console.error('Failed to delete reminder:', error);
       setIsDeleting(false);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteModal(false);
   };
 
   const getRepeatBadgeColor = (repeat: string) => {
@@ -124,7 +172,7 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
             <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
           <button
-            onClick={handleDelete}
+            onClick={handleDeleteClick}
             disabled={isDeleting}
             className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
             title="Delete"
@@ -132,6 +180,15 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
             <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && (
+          <DeleteConfirmModal
+            title={reminder.title}
+            onConfirm={handleDeleteConfirm}
+            onCancel={handleDeleteCancel}
+          />
+        )}
       </div>
     );
   }
@@ -179,17 +236,34 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
         </div>
         
         <div className="flex items-center gap-2 text-sm">
-          <Repeat className="w-4 h-4 text-gray-400" />
+          <Repeat className="w-4 h-4 text-gray-400 dark:text-gray-500" />
           <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getRepeatBadgeColor(reminder.repeat)}`}>
             {reminder.repeat}
           </span>
         </div>
 
         {reminder.active && (
-          <div className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <Calendar className="w-4 h-4" />
             <span className="font-medium">{countdown}</span>
           </div>
+        )}
+
+        {/* Streak display */}
+        {reminder.streak && reminder.streak.count > 0 && (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className={`flex items-center gap-1.5 text-sm ${getStreakColor(reminder.streak.count)}`}
+          >
+            <Flame className="w-4 h-4" />
+            <span className="font-bold">{reminder.streak.count} day streak</span>
+            {reminder.streak.longestStreak > reminder.streak.count && (
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                (best: {reminder.streak.longestStreak})
+              </span>
+            )}
+          </motion.div>
         )}
       </div>
 
@@ -244,7 +318,7 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
           </button>
 
           <button
-            onClick={handleDelete}
+            onClick={handleDeleteClick}
             disabled={isDeleting}
             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
             title="Delete reminder"
@@ -253,6 +327,15 @@ export default function ReminderCard({ reminder, onUpdate, onEdit, onCheckIn, vi
           </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          title={reminder.title}
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+        />
+      )}
     </div>
   );
 }

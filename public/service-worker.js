@@ -1,7 +1,7 @@
-// Yrfrsf Service Worker v2.0
-const CACHE_NAME = 'yrfrsf-v2';
-const STATIC_CACHE = 'yrfrsf-static-v2';
-const DYNAMIC_CACHE = 'yrfrsf-dynamic-v2';
+// YFS Service Worker v3.0 - Push Notifications & Background Sync
+const CACHE_NAME = 'yfs-v3';
+const STATIC_CACHE = 'yfs-static-v3';
+const DYNAMIC_CACHE = 'yfs-dynamic-v3';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -145,7 +145,7 @@ self.addEventListener('push', (event) => {
     data = event.data.json();
   } catch (e) {
     data = {
-      title: 'Yrfrsf Reminder',
+      title: 'Your Future Self is Calling',
       body: event.data.text()
     };
   }
@@ -154,18 +154,19 @@ self.addEventListener('push', (event) => {
     body: data.body || 'You have a reminder!',
     icon: '/icon-192.svg',
     badge: '/favicon.svg',
-    tag: data.tag || 'yrfrsf-notification',
+    tag: data.tag || 'yfs-notification',
     data: data.data || {},
-    vibrate: [200, 100, 200, 100, 200],
+    vibrate: [200, 100, 200, 100, 200, 100, 200],
     requireInteraction: true,
     actions: [
       { action: 'answer', title: 'Answer' },
+      { action: 'snooze', title: 'Snooze' },
       { action: 'dismiss', title: 'Dismiss' }
     ]
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Yrfrsf', options)
+    self.registration.showNotification(data.title || 'YFS Reminder', options)
   );
 });
 

@@ -7,6 +7,7 @@
 
 import { openDB, IDBPDatabase } from 'idb';
 import { Reminder } from '../utils/reminderScheduler';
+import logger from '../utils/logger';
 
 // ============================================================================
 // DATABASE CONFIGURATION
@@ -100,7 +101,7 @@ export async function initDB(): Promise<IDBPDatabase<ReminderDB>> {
   try {
     db = await openDB<ReminderDB>(DB_NAME, DB_VERSION, {
       upgrade(database, oldVersion, newVersion) {
-        console.log(`🔄 Upgrading database from version ${oldVersion} to ${newVersion}`);
+        logger.log(`Upgrading database from version ${oldVersion} to ${newVersion}`);
 
         // Create the reminders object store
         if (!database.objectStoreNames.contains('reminders')) {
@@ -113,7 +114,7 @@ export async function initDB(): Promise<IDBPDatabase<ReminderDB>> {
           store.createIndex('by-active', 'active');
           store.createIndex('by-createdAt', 'createdAt');
 
-          console.log('✅ Database initialized with reminders store');
+          logger.log('Database initialized with reminders store');
         }
 
         // Create the call history object store (version 2+)
@@ -127,7 +128,7 @@ export async function initDB(): Promise<IDBPDatabase<ReminderDB>> {
           callStore.createIndex('by-reminderId', 'reminderId');
           callStore.createIndex('by-answered', 'answered');
 
-          console.log('✅ Database initialized with callHistory store');
+          logger.log('Database initialized with callHistory store');
         }
 
         // Create the completion prompts object store (version 3+)
@@ -141,14 +142,14 @@ export async function initDB(): Promise<IDBPDatabase<ReminderDB>> {
           promptStore.createIndex('by-reminderId', 'reminderId');
           promptStore.createIndex('by-completed', 'completed');
 
-          console.log('✅ Database initialized with completionPrompts store');
+          logger.log('Database initialized with completionPrompts store');
         }
       },
       blocked() {
-        console.warn('⚠️ Database upgrade blocked - please close other tabs with this app');
+        logger.warn('Database upgrade blocked - please close other tabs with this app');
       },
       blocking() {
-        console.warn('⚠️ Database is blocking an upgrade in another tab');
+        logger.warn('Database is blocking an upgrade in another tab');
         // Close the database to allow the upgrade
         if (db) {
           db.close();
@@ -161,10 +162,10 @@ export async function initDB(): Promise<IDBPDatabase<ReminderDB>> {
       },
     });
 
-    console.log('✅ Database connection established');
+    logger.log('Database connection established');
     return db;
   } catch (error) {
-    console.error('❌ Failed to initialize database:', error);
+    logger.error('Failed to initialize database:', error);
     throw error;
   }
 }
@@ -195,7 +196,7 @@ export async function getReminder(id: string): Promise<Reminder | undefined> {
 export async function addReminder(reminder: Reminder): Promise<void> {
   const database = await initDB();
   await database.add('reminders', reminder);
-  console.log('✅ Reminder added:', reminder.title);
+  logger.log('Reminder added:', reminder.title);
 }
 
 /**
@@ -204,7 +205,7 @@ export async function addReminder(reminder: Reminder): Promise<void> {
 export async function updateReminder(reminder: Reminder): Promise<void> {
   const database = await initDB();
   await database.put('reminders', reminder);
-  console.log('✅ Reminder updated:', reminder.title);
+  logger.log('Reminder updated:', reminder.title);
 }
 
 /**
@@ -213,7 +214,7 @@ export async function updateReminder(reminder: Reminder): Promise<void> {
 export async function deleteReminder(id: string): Promise<void> {
   const database = await initDB();
   await database.delete('reminders', id);
-  console.log('✅ Reminder deleted:', id);
+  logger.log('Reminder deleted:', id);
 }
 
 /**
@@ -222,7 +223,7 @@ export async function deleteReminder(id: string): Promise<void> {
 export async function clearAllReminders(): Promise<void> {
   const database = await initDB();
   await database.clear('reminders');
-  console.log('✅ All reminders cleared');
+  logger.log('All reminders cleared');
 }
 
 // ============================================================================
@@ -317,7 +318,7 @@ export async function addReminders(reminders: Reminder[]): Promise<void> {
     tx.done,
   ]);
   
-  console.log(`✅ Added ${reminders.length} reminders`);
+  logger.log(`Added ${reminders.length} reminders`);
 }
 
 /**
@@ -332,7 +333,7 @@ export async function updateReminders(reminders: Reminder[]): Promise<void> {
     tx.done,
   ]);
   
-  console.log(`✅ Updated ${reminders.length} reminders`);
+  logger.log(`Updated ${reminders.length} reminders`);
 }
 
 /**
@@ -347,7 +348,7 @@ export async function deleteReminders(ids: string[]): Promise<void> {
     tx.done,
   ]);
   
-  console.log(`✅ Deleted ${ids.length} reminders`);
+  logger.log(`Deleted ${ids.length} reminders`);
 }
 
 // ============================================================================
@@ -420,7 +421,7 @@ export function closeDB(): void {
   if (db) {
     db.close();
     db = null;
-    console.log('✅ Database connection closed');
+    logger.log('Database connection closed');
   }
 }
 
@@ -432,7 +433,7 @@ export async function deleteDB(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.deleteDatabase(DB_NAME);
     request.onsuccess = () => {
-      console.log('✅ Database deleted');
+      logger.log('Database deleted');
       resolve();
     };
     request.onerror = () => reject(request.error);
@@ -476,7 +477,7 @@ export async function getDBStats(): Promise<{
 export async function addCallHistory(entry: CallHistoryEntry): Promise<void> {
   const database = await initDB();
   await database.add('callHistory', entry);
-  console.log('✅ Call history entry added:', entry.id);
+  logger.log('Call history entry added:', entry.id);
 }
 
 /**
@@ -485,7 +486,7 @@ export async function addCallHistory(entry: CallHistoryEntry): Promise<void> {
 export async function updateCallHistory(entry: CallHistoryEntry): Promise<void> {
   const database = await initDB();
   await database.put('callHistory', entry);
-  console.log('✅ Call history entry updated:', entry.id);
+  logger.log('Call history entry updated:', entry.id);
 }
 
 /**
@@ -532,7 +533,7 @@ export async function getMissedCalls(): Promise<CallHistoryEntry[]> {
 export async function deleteCallHistory(id: string): Promise<void> {
   const database = await initDB();
   await database.delete('callHistory', id);
-  console.log('✅ Call history entry deleted:', id);
+  logger.log('Call history entry deleted:', id);
 }
 
 /**
@@ -541,7 +542,7 @@ export async function deleteCallHistory(id: string): Promise<void> {
 export async function clearAllCallHistory(): Promise<void> {
   const database = await initDB();
   await database.clear('callHistory');
-  console.log('✅ All call history cleared');
+  logger.log('All call history cleared');
 }
 
 /**
@@ -587,7 +588,7 @@ export async function getCallHistoryStats(): Promise<{
 export async function addCompletionPrompt(prompt: CompletionPrompt): Promise<void> {
   const database = await initDB();
   await database.add('completionPrompts', prompt);
-  console.log('✅ Completion prompt added:', prompt.id);
+  logger.log('Completion prompt added:', prompt.id);
 }
 
 /**
@@ -606,7 +607,7 @@ export async function updateCompletionPrompt(id: string, updates: Partial<Comple
   const updatedPrompt = { ...existingPrompt, ...updates };
 
   await database.put('completionPrompts', updatedPrompt);
-  console.log('✅ Completion prompt updated:', id);
+  logger.log('Completion prompt updated:', id);
 }
 
 /**
@@ -642,7 +643,7 @@ export async function getUnansweredPrompts(): Promise<CompletionPrompt[]> {
 export async function deleteCompletionPrompt(id: string): Promise<void> {
   const database = await initDB();
   await database.delete('completionPrompts', id);
-  console.log('✅ Completion prompt deleted:', id);
+  logger.log('Completion prompt deleted:', id);
 }
 
 // ============================================================================
@@ -778,6 +779,6 @@ export async function importData(
     }
   }
 
-  console.log(`✅ Import complete: ${imported} items imported, ${errors.length} errors`);
+  logger.log(`Import complete: ${imported} items imported, ${errors.length} errors`);
   return { imported, errors };
 }

@@ -34,7 +34,6 @@ export function useIncomingCalls() {
     if (!user) return;
 
     const unsubscribe = subscribeToPendingCalls(user.id, (newCall) => {
-      console.log('📞 Incoming call from:', newCall.sender_name || newCall.sender_email);
       setIncomingCall(newCall);
       setPendingCalls(prev => [newCall, ...prev]);
 
@@ -68,8 +67,8 @@ export function useIncomingCalls() {
             ctx.close();
           }, 200);
         });
-      } catch (e) {
-        console.log('Could not play notification sound');
+      } catch {
+        // Ignore notification sound errors
       }
     });
 

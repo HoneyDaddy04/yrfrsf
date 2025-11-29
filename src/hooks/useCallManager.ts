@@ -67,7 +67,6 @@ export function useCallManager() {
             ? endedAt - callHistory.answeredAt
             : 0;
 
-          console.log('📞 Call ended - Duration:', duration, 'ms', `(${Math.round(duration / 1000)}s)`);
 
           const updatedEntry = {
             ...callHistory,

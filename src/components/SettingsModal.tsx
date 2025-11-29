@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload, LogOut, User, Beaker } from 'lucide-react';
+import { X, Save, Key, Volume2, Bell, Music, Phone, AlertCircle, Mic, Play, Download, Upload, LogOut, User, Beaker, Sun, Moon, Monitor } from 'lucide-react';
 import { AVAILABLE_RINGTONES, type RingtoneType, generateRingtone } from '../utils/ringtones';
 import { getBrowserVoices, OPENAI_VOICES, previewVoice, type TTSProvider, type BrowserVoice } from '../utils/textToSpeech';
 import { exportAllData, importData, type ExportData } from '../db/reminderDB';
 import AudioRecorder from './AudioRecorder';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -36,6 +37,7 @@ interface Settings {
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const { user, signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<Settings>({
     apiKey: '',
     apiEndpoint: 'https://api.openai.com/v1/audio/speech',
@@ -88,12 +90,13 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
       if (savedSettings) {
         setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
       }
-    } catch {
+    } catch (error) {
+      console.warn('Failed to parse settings from localStorage:', error);
       // Use default settings if parse fails
     }
 
     // Load browser voices
-    getBrowserVoices().then(setBrowserVoices);
+    getBrowserVoices().then(setBrowserVoices).catch(console.warn);
   }, []);
 
   const handleSave = () => {
@@ -113,9 +116,12 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
     if (isPlayingPreview) return;
     setIsPlayingPreview(true);
     try {
-      // @ts-ignore - webkitAudioContext for Safari
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContext();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        setIsPlayingPreview(false);
+        return;
+      }
+      const audioContext = new AudioContextClass();
       const buffer = generateRingtone(audioContext, ringtoneType);
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
@@ -186,18 +192,22 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-            <X className="w-6 h-6 text-gray-500" />
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            aria-label="Close settings"
+          >
+            <X className="w-6 h-6 text-gray-500 dark:text-gray-400" />
           </button>
         </div>
 
         {/* Tabs - properly sized for all screens */}
-        <div className="flex border-b border-gray-200 bg-white flex-shrink-0">
+        <div className="flex border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
           {[
             { id: 'general' as const, label: 'General', icon: Bell },
             { id: 'voice' as const, label: 'Voice', icon: Mic },
@@ -209,8 +219,8 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 text-xs sm:text-sm font-medium transition-colors border-b-2 ${
                 activeTab === tab.id
-                  ? 'text-indigo-600 border-indigo-600 bg-indigo-50'
-                  : 'text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-50'
+                  ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30'
+                  : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-700'
               }`}
             >
               <tab.icon className="w-4 h-4 flex-shrink-0" />
@@ -270,9 +280,42 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
               </div>
 
+              {/* Theme Settings */}
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  <Sun className="w-5 h-5 text-indigo-600" />
+                  <span>Appearance</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'light' as const, label: 'Light', icon: Sun },
+                    { id: 'dark' as const, label: 'Dark', icon: Moon },
+                    { id: 'system' as const, label: 'System', icon: Monitor },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => setTheme(option.id)}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        theme === option.id
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    >
+                      <option.icon className={`w-6 h-6 ${
+                        theme === option.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-400'
+                      }`} />
+                      <span className={`text-sm font-medium ${
+                        theme === option.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
+                      }`}>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Auto-Recall Settings */}
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
                   <Phone className="w-5 h-5 text-indigo-600" />
                   <span>Auto-Recall</span>
                 </div>
