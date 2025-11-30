@@ -214,7 +214,16 @@ export async function updateReminder(reminder: Reminder): Promise<void> {
 export async function deleteReminder(id: string): Promise<void> {
   const database = await initDB();
   await database.delete('reminders', id);
-  logger.log('Reminder deleted:', id);
+  logger.log('Reminder deleted locally:', id);
+
+  // Also delete from Supabase if configured
+  try {
+    const { deleteReminderFromSupabase } = await import('../services/supabaseSync');
+    await deleteReminderFromSupabase(id);
+    logger.log('Reminder deleted from cloud:', id);
+  } catch (err) {
+    logger.warn('Failed to delete from cloud (may not exist):', err);
+  }
 }
 
 /**
